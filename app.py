@@ -40,7 +40,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# GOOGLE SHEETS API SETUP
+# GOOGLE SHEETS API SETUP (unchanged)
 # ══════════════════════════════════════════════════════════════
 @st.cache_resource
 def get_google_sheets_service():
@@ -155,33 +155,33 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# USER SETUP (WITH OPTIONAL SECRET USER KEYS)
+# LOAD ALL KEYS FROM SECRETS
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
-LOGOUT_PASSWORD = st.secrets.get("switch_password", "")
-
 if not dan_url or not bram_url:
     st.error("❌ Missing sheet URLs in secrets. Add `daniel_gsheets_url` and `bram_gsheets_url`.")
     st.stop()
 
-# Optional complex keys – if not set, fall back to "Daniel" / "Bram"
-dan_key = st.secrets.get("daniel_user_key", "Daniel")
-bram_key = st.secrets.get("bram_user_key", "Bram")
+dan_key = st.secrets.get("daniel_user_key")
+bram_key = st.secrets.get("bram_user_key")
+admin_key = st.secrets.get("admin_user_key")
 
-# Build mappings
+if not dan_key or not bram_key or not admin_key:
+    st.error("❌ Missing user keys in secrets. Add `daniel_user_key`, `bram_user_key`, and `admin_user_key`.")
+    st.stop()
+
 USER_DATA = {
     dan_key: dan_url,
     bram_key: bram_url
 }
-LABEL_TO_KEY = {
-    "Daniel": dan_key,
-    "Bram": bram_key
+KEY_TO_LABEL = {
+    dan_key: "Daniel",
+    bram_key: "Bram"
 }
-KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
 def get_display_name(user_key):
-    return KEY_TO_LABEL.get(user_key, user_key)
+    return KEY_TO_LABEL.get(user_key, "Unknown User")
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
@@ -204,6 +204,7 @@ if 'users' not in st.session_state: st.session_state['users'] = USER_DATA
 if 'auth_status' not in st.session_state: st.session_state['auth_status'] = False
 if 'current_user' not in st.session_state: st.session_state['current_user'] = None
 if 'sheet_url' not in st.session_state: st.session_state['sheet_url'] = ""
+if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 if 'gsheets_available' not in st.session_state:
     st.session_state['gsheets_available'] = get_google_sheets_service() is not None
 
@@ -330,49 +331,56 @@ div[data-testid="stForm"] { margin-bottom: 1rem !important; }
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN via URL parameter (uses complex keys if set)
+# AUTO‑LOGIN via URL parameter
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
-    if saved_user and saved_user in USER_DATA:
-        st.session_state['auth_status'] = True
-        st.session_state['current_user'] = saved_user
-        st.session_state['sheet_url'] = USER_DATA[saved_user]
-    elif saved_user and saved_user not in USER_DATA:
-        st.query_params.clear()
-        st.rerun()
+    if saved_user:
+        if saved_user == admin_key:
+            # Admin link – show profile selection
+            st.session_state['is_admin'] = True
+            st.session_state['auth_status'] = False   # ensure selection screen appears
+        elif saved_user in USER_DATA:
+            st.session_state['auth_status'] = True
+            st.session_state['current_user'] = saved_user
+            st.session_state['sheet_url'] = USER_DATA[saved_user]
+            st.session_state['is_admin'] = False
+        else:
+            # Invalid key
+            st.query_params.clear()
+            st.error("🔒 Access Denied. Invalid link.")
+            st.stop()
+    else:
+        # No user param – only admin can use localStorage redirect
+        # (the script above already handles localStorage; if we're here, localStorage was empty)
+        st.error("🔒 Access Denied. Use your personal link to log in.")
+        st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# PROFILE SELECTION (buttons use display names, URL uses complex key)
+# ADMIN PROFILE SELECTION SCREEN
 # ══════════════════════════════════════════════════════════════
-if not st.session_state['auth_status']:
+if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.markdown("""
     <div class="app-bar" style="border:none; justify-content:center; margin-top:3rem;">
         <div style="text-align:center;">
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V23</div>
+            <div class="tagline">Admin Control</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("<div class='s-head' style='text-align:center; margin-bottom: 2rem;'>SELECT PROFILE</div>", unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("DANIEL", key="btn_dan", use_container_width=True):
-            key = LABEL_TO_KEY["Daniel"]
-            st.session_state['auth_status'] = True
-            st.session_state['current_user'] = key
-            st.session_state['sheet_url'] = USER_DATA[key]
-            st.query_params.user = key
-            st.rerun()
-    with col2:
-        if st.button("BRAM", key="btn_bram", use_container_width=True):
-            key = LABEL_TO_KEY["Bram"]
-            st.session_state['auth_status'] = True
-            st.session_state['current_user'] = key
-            st.session_state['sheet_url'] = USER_DATA[key]
-            st.query_params.user = key
-            st.rerun()
+    cols = st.columns(len(USER_DATA))
+    for i, (user_key, url) in enumerate(USER_DATA.items()):
+        display_name = get_display_name(user_key)
+        with cols[i]:
+            if st.button(display_name.upper(), key=f"admin_{user_key}", use_container_width=True):
+                st.session_state['auth_status'] = True
+                st.session_state['current_user'] = user_key
+                st.session_state['sheet_url'] = url
+                st.session_state['is_admin'] = True   # keep admin rights
+                st.query_params.user = user_key
+                st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
@@ -570,12 +578,11 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# (Analysis, Trends, Data tabs are identical to previous complete versions – no login changes)
+# (The Analysis, Trends, Data tabs are identical to previous complete versions)
 
 elif app_view == "Settings":
     header_placeholder.empty()
 
-   
     if st.session_state['gsheets_available']:
         st.markdown(f"<div style='font-size:0.7rem; color:var(--c-emerald); margin-bottom:1rem;'>🟢 Google Sheets API Connected</div>", unsafe_allow_html=True)
     else:
@@ -625,38 +632,17 @@ elif app_view == "Settings":
             st.success("✅ Protocol updated!")
             st.rerun()
 
-    # ── PASSWORD‑PROTECTED LOGOUT (FIXED) ──
-    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-
-    if st.session_state['current_user'] != dan_key:
-        if not LOGOUT_PASSWORD:
-            st.error("❌ Logout password is missing in secrets. Contact the admin.")
-            st.stop()
-        logout_password = st.text_input("Enter password to switch user", type="password")
-    else:
-        logout_password = None
-
-    if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        if st.session_state['current_user'] != dan_key:
-            if logout_password != LOGOUT_PASSWORD:
-                st.error("Incorrect password. Access denied.")
-            else:
-                # Password correct – proceed with logout
-                st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
-                st.session_state['auth_status'] = False
-                st.session_state['current_user'] = None
-                if 'active_df' in st.session_state:
-                    del st.session_state['active_df']
-                st.query_params.clear()
-                st.cache_data.clear()
-                st.rerun()
-        else:
-            # Daniel – logout directly
+    # ── ADMIN CONTROL (only visible for admin) ──
+    if st.session_state['is_admin']:
+        st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
+        if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
+            # Clear user but keep admin flag, return to selection screen
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
             st.session_state['auth_status'] = False
             st.session_state['current_user'] = None
+            st.session_state['sheet_url'] = ""
             if 'active_df' in st.session_state:
                 del st.session_state['active_df']
-            st.query_params.clear()
+            st.query_params.user = admin_key
             st.cache_data.clear()
             st.rerun()
