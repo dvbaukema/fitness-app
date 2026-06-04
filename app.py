@@ -10,7 +10,6 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-
 # ══════════════════════════════════════════════════════════════
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
@@ -41,7 +40,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# GOOGLE SHEETS API SETUP (unchanged)
+# GOOGLE SHEETS API SETUP
 # ══════════════════════════════════════════════════════════════
 @st.cache_resource
 def get_google_sheets_service():
@@ -156,7 +155,7 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD ALL KEYS FROM SECRETS (WITH DEBUG)
+# LOAD ALL KEYS FROM SECRETS
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -168,7 +167,6 @@ dan_key = st.secrets.get("daniel_user_key")
 bram_key = st.secrets.get("bram_user_key")
 admin_key = st.secrets.get("admin_user_key")
 
-# Temporary debug – remove after everything works
 missing = []
 if not dan_key: missing.append("daniel_user_key")
 if not bram_key: missing.append("bram_user_key")
@@ -229,7 +227,7 @@ if 'goal_profiles' not in st.session_state:
     }
 
 # ══════════════════════════════════════════════════════════════
-# OBSIDIAN THEME CSS (unchanged)
+# OBSIDIAN THEME CSS
 # ══════════════════════════════════════════════════════════════
 css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -386,7 +384,7 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# MATH ENGINE & GLOBAL HELPERS (unchanged)
+# MATH ENGINE & GLOBAL HELPERS
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
 def dclass(v, invert=False):
@@ -489,7 +487,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
+# MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -580,7 +578,191 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# (The Analysis, Trends, Data tabs are unchanged – copy them from any earlier full version)
+elif app_view == "Analysis":
+    header_placeholder.empty()
+    if not has_enough_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
+        st.stop()
+
+    last = df.iloc[-1]
+    w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
+    wt, bft, mmt = monthly_trends['Weight (kg)'], monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
+
+    c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates)
+    c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
+    c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
+
+    st.markdown(f"""
+    <div class="s-head" style="margin-top:0;">Performance Data</div>
+    <div class="mini-grid">
+        <div class="mini-cell">
+            <span class="mini-lbl">Weight</span>
+            <span class="mini-val">{w:.1f}</span>
+            <div class="mini-sub {c_w}">{sgn(wt)}{wt:.2f} kg/mo</div>
+        </div>
+        <div class="mini-cell">
+            <span class="mini-lbl">Muscle Mass</span>
+            <span class="mini-val">{mm:.1f}</span>
+            <div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>
+        </div>
+        <div class="mini-cell">
+            <span class="mini-lbl">Body Fat</span>
+            <span class="mini-val">{bf:.1f}</span>
+            <div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>
+        </div>
+    </div>
+    <div class="s-head">Trajectory Logic</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(
+        traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo") +
+        traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
+        traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="s-head">System Diagnostics</div>', unsafe_allow_html=True)
+    w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
+    m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
+    bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
+    diags = []
+    if wt > w_upper:
+        diags.append(hud_card("c-err", "↓", "OVER UPPER LIMIT", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Reduce caloric intake by 200-300 kcal."))
+    elif wt < w_lower:
+        if w_lower < 0:
+            diags.append(hud_card("c-err", "⚠️", "CATABOLIC DANGER", f"Losing weight too rapidly ({wt:.2f} kg/mo). Increase caloric intake immediately."))
+        else:
+            diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
+    if wt >= w_lower and mmt < m_lower:
+        diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/mo). Ensure high protein intake (1.6-2.2g/kg)."))
+    if bft > bf_upper:
+        diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
+    if not diags:
+        diags.append(hud_card("c-ok", "✓", "LOCKED IN", "All tracked parameters are within optimal bounds. Stay the course."))
+    for d in diags:
+        st.markdown(d, unsafe_allow_html=True)
+
+    if st.session_state['enable_achievements']:
+        start_gym_time = st.session_state['gym_start_date']
+        days_elapsed = max(0, (datetime.now().date() - start_gym_time).days)
+        TIERS = [
+            {"name": "Day 1", "emoji": "👋", "days": 0},
+            {"name": "1 Week", "emoji": "🌱", "days": 7},
+            {"name": "2 Weeks", "emoji": "🌿", "days": 14},
+            {"name": "3 Weeks", "emoji": "🍃", "days": 21},
+            {"name": "4 Weeks", "emoji": "🪴", "days": 28},
+            {"name": "10 Weeks", "emoji": "🌲", "days": 70},
+            {"name": "15 Weeks", "emoji": "🌳", "days": 105},
+            {"name": "20 Weeks", "emoji": "🥉", "days": 140},
+            {"name": "25 Weeks", "emoji": "🥈", "days": 175},
+            {"name": "30 Weeks", "emoji": "🥇", "days": 210},
+            {"name": "40 Weeks", "emoji": "🏅", "days": 280},
+            {"name": "1 Year", "emoji": "🏆", "days": 365},
+            {"name": "2 Years", "emoji": "🔥", "days": 730},
+            {"name": "3 Years", "emoji": "⚡", "days": 1095},
+            {"name": "4 Years", "emoji": "🦾", "days": 1460},
+            {"name": "5 Years", "emoji": "⚙️", "days": 1825},
+            {"name": "6 Years", "emoji": "💎", "days": 2190},
+            {"name": "7 Years", "emoji": "🔮", "days": 2555},
+            {"name": "8 Years", "emoji": "👑", "days": 2920},
+            {"name": "9 Years", "emoji": "🚀", "days": 3285},
+            {"name": "10 Years", "emoji": "🌌", "days": 3650}
+        ]
+        current_tier_idx = 0
+        for i, t in enumerate(TIERS):
+            if days_elapsed >= t["days"]:
+                current_tier_idx = i
+
+        st.markdown('<div class="s-head">Achievements</div>', unsafe_allow_html=True)
+        engine_html = "<div style='margin-bottom: 2rem;'>\n"
+        start_idx = max(0, current_tier_idx - 3)
+        for i in range(start_idx, current_tier_idx):
+            t = TIERS[i]
+            engine_html += f"<div class='tier-item completed'><div class='tier-emoji'>{t['emoji']}</div><div class='tier-details'><div class='tier-name'>{t['name']}</div><div class='tier-req'>UNLOCKED: {t['days']} DAYS</div></div><div style='color:var(--c-emerald); font-weight:800;'>✓</div></div>\n"
+        t_curr = TIERS[current_tier_idx]
+        if current_tier_idx < len(TIERS) - 1:
+            t_next = TIERS[current_tier_idx + 1]
+            progress = ((days_elapsed - t_curr['days']) / (t_next['days'] - t_curr['days'])) * 100
+            engine_html += f"<div class='tier-item current'><div class='tier-emoji'>{t_curr['emoji']}</div><div class='tier-details'><div style='display:flex; justify-content:space-between; align-items:flex-end;'><div class='tier-name' style='color:var(--c-emerald);'>{t_curr['name']}</div><div style='font-size:0.6rem; font-weight:700;'>{days_elapsed} / {t_next['days']} D</div></div><div class='prog-tk'><div class='prog-fill' style='width:{progress}%;'></div></div></div></div>\n"
+        else:
+            engine_html += f"<div class='tier-item current'><div class='tier-emoji'>{t_curr['emoji']}</div><div class='tier-details'><div class='tier-name' style='color:var(--c-emerald);'>{t_curr['name']}</div><div class='tier-req'>MAXIMUM TIER REACHED</div></div></div>\n"
+        end_idx = min(len(TIERS), current_tier_idx + 3)
+        for i in range(current_tier_idx + 1, end_idx):
+            t = TIERS[i]
+            engine_html += f"<div class='tier-item locked'><div class='tier-emoji'>🔒</div><div class='tier-details'><div class='tier-name'>{t['name']}</div><div class='tier-req'>REQUIRES: {t['days']} DAYS</div></div></div>\n"
+        engine_html += "</div>"
+        st.markdown(engine_html, unsafe_allow_html=True)
+
+elif app_view == "Trends":
+    header_placeholder.empty()
+    if not has_enough_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
+        st.stop()
+
+    font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
+    for metric in METRICS:
+        last_val = df.iloc[-1][metric]
+        unit = METRIC_UNIT[metric]
+        trend = monthly_trends[metric]
+        target = ideal_rates[metric][0]
+        c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
+        st.markdown(f"""
+        <div class="chart-blk">
+            <div class="chart-meta">
+                <div>
+                    <div style="font-size:0.65rem; color:var(--text-muted); font-weight:600;">{METRIC_SHORT[metric]}</div>
+                    <div class="chart-val">{last_val:.1f}<span class="chart-unit"> {unit}</span></div>
+                </div>
+                <div style="text-align: right;">
+                    <span class="t-chip {c_bg} {c_txt}">ACTUAL: {sgn(trend)}{trend:.2f}</span><br>
+                    <span class="t-chip" style="background:rgba(150,150,150,0.15); margin-top:4px;">TARGET: {sgn(target)}{target:.2f}</span>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df['Date'], y=df[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=recent_df['Date'], y=recent_df[metric], mode='lines+markers', name='Recent', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+        last_raw = df.iloc[-1][metric]
+        daily_rate = ideal_rates[metric][0] / 30.0
+        ideal_vals = [last_raw] + [last_raw + daily_rate * x for x in range(1, 61)]
+        fig.add_trace(go.Scatter(x=[df['Date'].max()] + future_dates, y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=0, r=0, t=0, b=5), height=130, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
+            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d'),
+            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+elif app_view == "Data":
+    header_placeholder.empty()
+    st.markdown('<div class="s-head" style="margin-top:0;">RAW DATABANK</div>', unsafe_allow_html=True)
+    display_df = df.copy()
+    if 'Days' in display_df.columns:
+        display_df = display_df.drop(columns=['Days'])
+    display_df['Date'] = display_df['Date'].dt.strftime('%d %b %Y')
+    edited_df = st.data_editor(
+        display_df, num_rows="dynamic", use_container_width=True, hide_index=False,
+        column_config={
+            "Date": st.column_config.TextColumn("Date", disabled=True),
+            "Weight (kg)": st.column_config.NumberColumn("Weight", format="%.1f"),
+            "Muscle Mass (kg)": st.column_config.NumberColumn("Muscle Mass", format="%.1f"),
+            "Body Fat (%)": st.column_config.NumberColumn("Fat %", format="%.1f")
+        }
+    )
+    if st.button("OVERRIDE DATABANK", use_container_width=True):
+        edited_df['Date'] = pd.to_datetime(edited_df['Date'])
+        success = overwrite_gsheet(st.session_state['sheet_url'], edited_df)
+        st.session_state['active_df'] = edited_df
+        load_data.clear()
+        if success:
+            st.success("✅ Google Sheets updated successfully!")
+        else:
+            st.warning("⚠️ Local state updated. Google Sheets sync failed.")
+        st.rerun()
 
 elif app_view == "Settings":
     header_placeholder.empty()
