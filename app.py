@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ══════════════════════════════════════════════════════════════
-# AUTO-LOGIN FROM HOME SCREEN (localStorage)
+# AUTO‑LOGIN FROM HOME SCREEN (localStorage)
 # ══════════════════════════════════════════════════════════════
 st.markdown("""
 <script>
@@ -154,34 +154,30 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD USER DATA FROM SECRETS (NO HARDCODED DEFAULTS)
+# LOAD USER DATA FROM SECRETS
 # ══════════════════════════════════════════════════════════════
-dan_url = st.secrets.get("daniel_gsheets_url", "")
-bram_url = st.secrets.get("bram_gsheets_url", "")
-dan_key = st.secrets.get("daniel_user_key", "")
-bram_key = st.secrets.get("bram_user_key", "Bram")   # fallback only for Bram if not set
+def get_required_secret(name):
+    """Fetch a required secret or raise an error if missing."""
+    val = st.secrets.get(name, "")
+    if not val:
+        st.error(f"❌ Missing secret: `{name}`. Please add it in Streamlit Cloud → Settings → Secrets.")
+        st.stop()
+    return val
 
-# Build mappings from secret key → sheet URL and label → key
-USER_DATA = {}
-if dan_url and dan_key:
-    USER_DATA[dan_key] = dan_url
-if bram_url and bram_key:
-    USER_DATA[bram_key] = bram_url
+# These must be set in secrets
+dan_url = get_required_secret("daniel_gsheets_url")
+bram_url = get_required_secret("bram_gsheets_url")
+dan_key = get_required_secret("daniel_user_key")
+bram_key = get_required_secret("bram_user_key")
+LOGOUT_PASSWORD = get_required_secret("switch_password")
 
-LABEL_TO_KEY = {}
-if dan_key:
-    LABEL_TO_KEY["Daniel"] = dan_key
-if bram_key:
-    LABEL_TO_KEY["Bram"] = bram_key
-
-# Reverse mapping for display
+# Build mappings
+USER_DATA = {dan_key: dan_url, bram_key: bram_url}
+LABEL_TO_KEY = {"Daniel": dan_key, "Bram": bram_key}
 KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
 
 def get_display_name(user_key):
     return KEY_TO_LABEL.get(user_key, user_key)
-
-# Password for non‑Daniel logout (must be set in secrets)
-LOGOUT_PASSWORD = st.secrets.get("switch_password", "")
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
@@ -330,7 +326,7 @@ div[data-testid="stForm"] { margin-bottom: 1rem !important; }
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO-LOGIN via URL parameter (now uses secret keys)
+# AUTO‑LOGIN via URL parameter
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
@@ -339,12 +335,11 @@ if not st.session_state['auth_status']:
         st.session_state['current_user'] = saved_user
         st.session_state['sheet_url'] = USER_DATA[saved_user]
     elif saved_user and saved_user not in USER_DATA:
-        # Invalid user key in URL – clear and show selection
         st.query_params.clear()
         st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# PROFILE SELECTION (no PIN, uses secret keys behind the scenes)
+# PROFILE SELECTION (no PIN)
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     st.markdown("""
@@ -360,43 +355,29 @@ if not st.session_state['auth_status']:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("DANIEL", key="btn_dan", use_container_width=True):
-            if "Daniel" not in LABEL_TO_KEY:
-                st.error("Daniel's profile is not configured.")
-            else:
-                key = LABEL_TO_KEY["Daniel"]
-                if not USER_DATA.get(key):
-                    st.error("Daniel's sheet URL is missing.")
-                else:
-                    st.session_state['auth_status'] = True
-                    st.session_state['current_user'] = key
-                    st.session_state['sheet_url'] = USER_DATA[key]
-                    st.query_params.user = key
-                    st.rerun()
+            key = LABEL_TO_KEY["Daniel"]
+            st.session_state['auth_status'] = True
+            st.session_state['current_user'] = key
+            st.session_state['sheet_url'] = USER_DATA[key]
+            st.query_params.user = key
+            st.rerun()
     with col2:
         if st.button("BRAM", key="btn_bram", use_container_width=True):
-            if "Bram" not in LABEL_TO_KEY:
-                st.error("Bram's profile is not configured.")
-            else:
-                key = LABEL_TO_KEY["Bram"]
-                if not USER_DATA.get(key):
-                    st.error("Bram's sheet URL is missing.")
-                else:
-                    st.session_state['auth_status'] = True
-                    st.session_state['current_user'] = key
-                    st.session_state['sheet_url'] = USER_DATA[key]
-                    st.query_params.user = key
-                    st.rerun()
+            key = LABEL_TO_KEY["Bram"]
+            st.session_state['auth_status'] = True
+            st.session_state['current_user'] = key
+            st.session_state['sheet_url'] = USER_DATA[key]
+            st.query_params.user = key
+            st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# MATH ENGINE & GLOBAL HELPERS
+# MATH ENGINE & GLOBAL HELPERS (unchanged)
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
-
 def dclass(v, invert=False):
     if invert: v = -v
     return "c-ok" if v > 0 else ("c-err" if v < 0 else "c-neu")
-
 def eval_metric(metric, actual, profile):
     if metric == 'Muscle Mass (kg)':
         tgt, lower = profile[metric][:2]
@@ -494,7 +475,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE
+# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -586,7 +567,8 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# (The rest of the app – Analysis, Trends, Data, Settings – follows, with the logout section updated as shown below)
+# The Analysis, Trends, Data views are identical to earlier versions and omitted for brevity.
+# Copy them from the previous full code – they don't affect login logic.
 
 elif app_view == "Settings":
     header_placeholder.empty()
@@ -639,20 +621,16 @@ elif app_view == "Settings":
             st.success("✅ Protocol updated!")
             st.rerun()
 
-    # ── PASSWORD‑PROTECTED LOGOUT (only Daniel can switch without password) ──
+    # ── PASSWORD‑PROTECTED LOGOUT ──
     st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-    daniel_key = st.secrets.get("daniel_user_key", "")
-    if st.session_state['current_user'] != daniel_key:
-        if not LOGOUT_PASSWORD:
-            st.warning("Logout password not set in secrets. Contact admin.")
-            logout_password = ""
-        else:
-            logout_password = st.text_input("Enter password to switch user", type="password")
+    # Only Daniel (dan_key) can log out freely. Everyone else must enter the switch_password.
+    if st.session_state['current_user'] != dan_key:
+        logout_password = st.text_input("Enter password to switch user", type="password")
     else:
         logout_password = None
 
     if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        if st.session_state['current_user'] != daniel_key and logout_password != LOGOUT_PASSWORD:
+        if st.session_state['current_user'] != dan_key and logout_password != LOGOUT_PASSWORD:
             st.error("Incorrect password. Access denied.")
         else:
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
@@ -663,5 +641,3 @@ elif app_view == "Settings":
             st.query_params.clear()
             st.cache_data.clear()
             st.rerun()
-
-# ... all other sections (Analysis, Trends, Data) remain unchanged from the previous full version ...
