@@ -155,7 +155,7 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD ALL KEYS FROM SECRETS
+# LOAD ALL KEYS FROM SECRETS (WITH DEBUG)
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -167,8 +167,13 @@ dan_key = st.secrets.get("daniel_user_key")
 bram_key = st.secrets.get("bram_user_key")
 admin_key = st.secrets.get("admin_user_key")
 
-if not dan_key or not bram_key or not admin_key:
-    st.error("❌ Missing user keys in secrets. Add `daniel_user_key`, `bram_user_key`, and `admin_user_key`.")
+# Temporary debug – remove after everything works
+missing = []
+if not dan_key: missing.append("daniel_user_key")
+if not bram_key: missing.append("bram_user_key")
+if not admin_key: missing.append("admin_user_key")
+if missing:
+    st.error(f"❌ Missing secrets: {', '.join(missing)}. Check your Streamlit Cloud secrets.")
     st.stop()
 
 USER_DATA = {
@@ -337,22 +342,18 @@ if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
     if saved_user:
         if saved_user == admin_key:
-            # Admin link – show profile selection
             st.session_state['is_admin'] = True
-            st.session_state['auth_status'] = False   # ensure selection screen appears
+            st.session_state['auth_status'] = False
         elif saved_user in USER_DATA:
             st.session_state['auth_status'] = True
             st.session_state['current_user'] = saved_user
             st.session_state['sheet_url'] = USER_DATA[saved_user]
             st.session_state['is_admin'] = False
         else:
-            # Invalid key
             st.query_params.clear()
             st.error("🔒 Access Denied. Invalid link.")
             st.stop()
     else:
-        # No user param – only admin can use localStorage redirect
-        # (the script above already handles localStorage; if we're here, localStorage was empty)
         st.error("🔒 Access Denied. Use your personal link to log in.")
         st.stop()
 
@@ -378,7 +379,7 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
                 st.session_state['auth_status'] = True
                 st.session_state['current_user'] = user_key
                 st.session_state['sheet_url'] = url
-                st.session_state['is_admin'] = True   # keep admin rights
+                st.session_state['is_admin'] = True
                 st.query_params.user = user_key
                 st.rerun()
     st.stop()
@@ -487,7 +488,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE
+# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -578,7 +579,7 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# (The Analysis, Trends, Data tabs are identical to previous complete versions)
+# (The Analysis, Trends, Data tabs are unchanged – copy them from any earlier full version)
 
 elif app_view == "Settings":
     header_placeholder.empty()
@@ -632,11 +633,10 @@ elif app_view == "Settings":
             st.success("✅ Protocol updated!")
             st.rerun()
 
-    # ── ADMIN CONTROL (only visible for admin) ──
+    # ── ADMIN CONTROL (only for admin) ──
     if st.session_state['is_admin']:
         st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
         if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-            # Clear user but keep admin flag, return to selection screen
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
             st.session_state['auth_status'] = False
             st.session_state['current_user'] = None
