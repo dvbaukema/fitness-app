@@ -10,6 +10,30 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+
+# ══════════════════════════════════════════════════════════════
+# LOAD ALL KEYS FROM SECRETS (WITH DEBUG)
+# ══════════════════════════════════════════════════════════════
+st.write("🔍 ALL SECRETS:", st.secrets)   # ← add this line temporarily
+
+dan_url = st.secrets.get("daniel_gsheets_url", "")
+bram_url = st.secrets.get("bram_gsheets_url", "")
+if not dan_url or not bram_url:
+    st.error("❌ Missing sheet URLs.")
+    st.stop()
+
+dan_key = st.secrets.get("daniel_user_key")
+bram_key = st.secrets.get("bram_user_key")
+admin_key = st.secrets.get("admin_user_key")
+
+missing = []
+if not dan_key: missing.append("daniel_user_key")
+if not bram_key: missing.append("bram_user_key")
+if not admin_key: missing.append("admin_user_key")
+if missing:
+    st.error(f"❌ Missing secrets: {', '.join(missing)}")
+    st.stop()
+
 # ══════════════════════════════════════════════════════════════
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
