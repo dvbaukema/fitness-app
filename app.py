@@ -154,30 +154,20 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD USER DATA FROM SECRETS
+# SIMPLE USER SETUP (NO COMPLEX KEYS)
 # ══════════════════════════════════════════════════════════════
-def get_required_secret(name):
-    """Fetch a required secret or raise an error if missing."""
-    val = st.secrets.get(name, "")
-    if not val:
-        st.error(f"❌ Missing secret: `{name}`. Please add it in Streamlit Cloud → Settings → Secrets.")
-        st.stop()
-    return val
+dan_url = st.secrets.get("daniel_gsheets_url", "")
+bram_url = st.secrets.get("bram_gsheets_url", "")
+LOGOUT_PASSWORD = st.secrets.get("switch_password", "")
 
-# These must be set in secrets
-dan_url = get_required_secret("daniel_gsheets_url")
-bram_url = get_required_secret("bram_gsheets_url")
-dan_key = get_required_secret("daniel_user_key")
-bram_key = get_required_secret("bram_user_key")
-LOGOUT_PASSWORD = get_required_secret("switch_password")
+if not dan_url or not bram_url:
+    st.error("❌ Missing sheet URLs in secrets. Add `daniel_gsheets_url` and `bram_gsheets_url`.")
+    st.stop()
 
-# Build mappings
-USER_DATA = {dan_key: dan_url, bram_key: bram_url}
-LABEL_TO_KEY = {"Daniel": dan_key, "Bram": bram_key}
-KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
-
-def get_display_name(user_key):
-    return KEY_TO_LABEL.get(user_key, user_key)
+USER_DATA = {
+    "Daniel": dan_url,
+    "Bram": bram_url
+}
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
@@ -339,7 +329,7 @@ if not st.session_state['auth_status']:
         st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# PROFILE SELECTION (no PIN)
+# PROFILE SELECTION
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     st.markdown("""
@@ -355,24 +345,22 @@ if not st.session_state['auth_status']:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("DANIEL", key="btn_dan", use_container_width=True):
-            key = LABEL_TO_KEY["Daniel"]
             st.session_state['auth_status'] = True
-            st.session_state['current_user'] = key
-            st.session_state['sheet_url'] = USER_DATA[key]
-            st.query_params.user = key
+            st.session_state['current_user'] = "Daniel"
+            st.session_state['sheet_url'] = USER_DATA["Daniel"]
+            st.query_params.user = "Daniel"
             st.rerun()
     with col2:
         if st.button("BRAM", key="btn_bram", use_container_width=True):
-            key = LABEL_TO_KEY["Bram"]
             st.session_state['auth_status'] = True
-            st.session_state['current_user'] = key
-            st.session_state['sheet_url'] = USER_DATA[key]
-            st.query_params.user = key
+            st.session_state['current_user'] = "Bram"
+            st.session_state['sheet_url'] = USER_DATA["Bram"]
+            st.query_params.user = "Bram"
             st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# MATH ENGINE & GLOBAL HELPERS (unchanged)
+# MATH ENGINE & GLOBAL HELPERS
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
 def dclass(v, invert=False):
@@ -475,7 +463,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
+# MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -485,12 +473,11 @@ app_view = st.segmented_control("Nav", ["Entry", "Analysis", "Trends", "Data", "
                                 default="Entry", label_visibility="collapsed")
 
 if app_view == "Entry":
-    display_name = get_display_name(st.session_state['current_user'])
     header_placeholder.markdown(f"""
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V23 | {display_name}</div>
+            <div class="tagline">Data Engine V23 | {st.session_state['current_user']}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -567,8 +554,8 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# The Analysis, Trends, Data views are identical to earlier versions and omitted for brevity.
-# Copy them from the previous full code – they don't affect login logic.
+# The Analysis, Trends, Data views are identical to previous complete versions.
+# Copy them from any earlier full code – they don't affect login/logout.
 
 elif app_view == "Settings":
     header_placeholder.empty()
@@ -578,7 +565,7 @@ elif app_view == "Settings":
         st.markdown(f"<div style='font-size:0.7rem; color:var(--c-amber); margin-bottom:1rem;'>🟡 Google Sheets API Not Connected</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
-    st.markdown(f"**Current User:** {get_display_name(st.session_state['current_user'])}")
+    st.markdown(f"**Current User:** {st.session_state['current_user']}")
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
     st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state['enable_quotes'])
@@ -623,14 +610,17 @@ elif app_view == "Settings":
 
     # ── PASSWORD‑PROTECTED LOGOUT ──
     st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-    # Only Daniel (dan_key) can log out freely. Everyone else must enter the switch_password.
-    if st.session_state['current_user'] != dan_key:
-        logout_password = st.text_input("Enter password to switch user", type="password")
+    if st.session_state['current_user'] != "Daniel":
+        if not LOGOUT_PASSWORD:
+            st.warning("Logout password not set in secrets. Add `switch_password`.")
+            logout_password = ""
+        else:
+            logout_password = st.text_input("Enter password to switch user", type="password")
     else:
         logout_password = None
 
     if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        if st.session_state['current_user'] != dan_key and logout_password != LOGOUT_PASSWORD:
+        if st.session_state['current_user'] != "Daniel" and logout_password != LOGOUT_PASSWORD:
             st.error("Incorrect password. Access denied.")
         else:
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
