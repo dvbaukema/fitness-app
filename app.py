@@ -575,10 +575,7 @@ if app_view == "Entry":
 elif app_view == "Settings":
     header_placeholder.empty()
 
-    # ── TEMPORARY DEBUG ──
-    st.write(f"🔍 Debug: LOGOUT_PASSWORD is set: {bool(LOGOUT_PASSWORD)}")
-    # ─────────────────────
-
+   
     if st.session_state['gsheets_available']:
         st.markdown(f"<div style='font-size:0.7rem; color:var(--c-emerald); margin-bottom:1rem;'>🟢 Google Sheets API Connected</div>", unsafe_allow_html=True)
     else:
