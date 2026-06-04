@@ -169,7 +169,7 @@ if not dan_url or not bram_url:
 dan_key = st.secrets.get("daniel_user_key", "Daniel")
 bram_key = st.secrets.get("bram_user_key", "Bram")
 
-# Build mappings: complex key → sheet URL, and display label → complex key
+# Build mappings
 USER_DATA = {
     dan_key: dan_url,
     bram_key: bram_url
@@ -479,7 +479,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
+# MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -570,11 +570,15 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# The Analysis, Trends, Data tabs are identical to earlier complete versions.
-# Copy them from any previous full code – they don’t affect login.
+# (Analysis, Trends, Data tabs are identical to previous complete versions – no login changes)
 
 elif app_view == "Settings":
     header_placeholder.empty()
+
+    # ── TEMPORARY DEBUG ──
+    st.write(f"🔍 Debug: LOGOUT_PASSWORD is set: {bool(LOGOUT_PASSWORD)}")
+    # ─────────────────────
+
     if st.session_state['gsheets_available']:
         st.markdown(f"<div style='font-size:0.7rem; color:var(--c-emerald); margin-bottom:1rem;'>🟢 Google Sheets API Connected</div>", unsafe_allow_html=True)
     else:
@@ -624,22 +628,33 @@ elif app_view == "Settings":
             st.success("✅ Protocol updated!")
             st.rerun()
 
-    # ── PASSWORD‑PROTECTED LOGOUT ──
+    # ── PASSWORD‑PROTECTED LOGOUT (FIXED) ──
     st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-    # Only the real Daniel (key == dan_key) can log out freely.
+
     if st.session_state['current_user'] != dan_key:
         if not LOGOUT_PASSWORD:
-            st.warning("Logout password not set in secrets. Add `switch_password`.")
-            logout_password = ""
-        else:
-            logout_password = st.text_input("Enter password to switch user", type="password")
+            st.error("❌ Logout password is missing in secrets. Contact the admin.")
+            st.stop()
+        logout_password = st.text_input("Enter password to switch user", type="password")
     else:
         logout_password = None
 
     if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        if st.session_state['current_user'] != dan_key and logout_password != LOGOUT_PASSWORD:
-            st.error("Incorrect password. Access denied.")
+        if st.session_state['current_user'] != dan_key:
+            if logout_password != LOGOUT_PASSWORD:
+                st.error("Incorrect password. Access denied.")
+            else:
+                # Password correct – proceed with logout
+                st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
+                st.session_state['auth_status'] = False
+                st.session_state['current_user'] = None
+                if 'active_df' in st.session_state:
+                    del st.session_state['active_df']
+                st.query_params.clear()
+                st.cache_data.clear()
+                st.rerun()
         else:
+            # Daniel – logout directly
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
             st.session_state['auth_status'] = False
             st.session_state['current_user'] = None
