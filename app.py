@@ -94,6 +94,7 @@ def read_gsheet(sheet_url):
         return df.sort_values('Date').dropna().reset_index(drop=True)
     except HttpError as e:
         st.error(f"Google Sheets API error: {e}")
+        st.info("💡 Did you share the sheet with the service account email?")
         return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
 
 def read_gsheet_csv(sheet_url):
@@ -154,7 +155,7 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# SIMPLE USER SETUP (NO COMPLEX KEYS)
+# USER SETUP (WITH OPTIONAL SECRET USER KEYS)
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -164,10 +165,23 @@ if not dan_url or not bram_url:
     st.error("❌ Missing sheet URLs in secrets. Add `daniel_gsheets_url` and `bram_gsheets_url`.")
     st.stop()
 
+# Optional complex keys – if not set, fall back to "Daniel" / "Bram"
+dan_key = st.secrets.get("daniel_user_key", "Daniel")
+bram_key = st.secrets.get("bram_user_key", "Bram")
+
+# Build mappings: complex key → sheet URL, and display label → complex key
 USER_DATA = {
-    "Daniel": dan_url,
-    "Bram": bram_url
+    dan_key: dan_url,
+    bram_key: bram_url
 }
+LABEL_TO_KEY = {
+    "Daniel": dan_key,
+    "Bram": bram_key
+}
+KEY_TO_LABEL = {v: k for k, v in LABEL_TO_KEY.items()}
+
+def get_display_name(user_key):
+    return KEY_TO_LABEL.get(user_key, user_key)
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
@@ -316,7 +330,7 @@ div[data-testid="stForm"] { margin-bottom: 1rem !important; }
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN via URL parameter
+# AUTO‑LOGIN via URL parameter (uses complex keys if set)
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
@@ -329,7 +343,7 @@ if not st.session_state['auth_status']:
         st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# PROFILE SELECTION
+# PROFILE SELECTION (buttons use display names, URL uses complex key)
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     st.markdown("""
@@ -345,22 +359,24 @@ if not st.session_state['auth_status']:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("DANIEL", key="btn_dan", use_container_width=True):
+            key = LABEL_TO_KEY["Daniel"]
             st.session_state['auth_status'] = True
-            st.session_state['current_user'] = "Daniel"
-            st.session_state['sheet_url'] = USER_DATA["Daniel"]
-            st.query_params.user = "Daniel"
+            st.session_state['current_user'] = key
+            st.session_state['sheet_url'] = USER_DATA[key]
+            st.query_params.user = key
             st.rerun()
     with col2:
         if st.button("BRAM", key="btn_bram", use_container_width=True):
+            key = LABEL_TO_KEY["Bram"]
             st.session_state['auth_status'] = True
-            st.session_state['current_user'] = "Bram"
-            st.session_state['sheet_url'] = USER_DATA["Bram"]
-            st.query_params.user = "Bram"
+            st.session_state['current_user'] = key
+            st.session_state['sheet_url'] = USER_DATA[key]
+            st.query_params.user = key
             st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# MATH ENGINE & GLOBAL HELPERS
+# MATH ENGINE & GLOBAL HELPERS (unchanged)
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
 def dclass(v, invert=False):
@@ -425,7 +441,7 @@ def load_data(url):
         raise Exception("URL Missing")
     df = read_gsheet(url)
     if df.empty:
-        raise Exception("No data found in sheet")
+        raise Exception("No data found in sheet – check sharing permissions and URL.")
     return df
 
 try:
@@ -463,7 +479,7 @@ if has_enough_data:
                         'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
-# MAIN ROUTING ENGINE
+# MAIN ROUTING ENGINE (Entry, Analysis, Trends, Data, Settings)
 # ══════════════════════════════════════════════════════════════
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
@@ -477,7 +493,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V23 | {st.session_state['current_user']}</div>
+            <div class="tagline">Data Engine V23 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -554,8 +570,8 @@ if app_view == "Entry":
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
-# The Analysis, Trends, Data views are identical to previous complete versions.
-# Copy them from any earlier full code – they don't affect login/logout.
+# The Analysis, Trends, Data tabs are identical to earlier complete versions.
+# Copy them from any previous full code – they don’t affect login.
 
 elif app_view == "Settings":
     header_placeholder.empty()
@@ -565,7 +581,7 @@ elif app_view == "Settings":
         st.markdown(f"<div style='font-size:0.7rem; color:var(--c-amber); margin-bottom:1rem;'>🟡 Google Sheets API Not Connected</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
-    st.markdown(f"**Current User:** {st.session_state['current_user']}")
+    st.markdown(f"**Current User:** {get_display_name(st.session_state['current_user'])}")
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
     st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state['enable_quotes'])
@@ -610,7 +626,8 @@ elif app_view == "Settings":
 
     # ── PASSWORD‑PROTECTED LOGOUT ──
     st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-    if st.session_state['current_user'] != "Daniel":
+    # Only the real Daniel (key == dan_key) can log out freely.
+    if st.session_state['current_user'] != dan_key:
         if not LOGOUT_PASSWORD:
             st.warning("Logout password not set in secrets. Add `switch_password`.")
             logout_password = ""
@@ -620,7 +637,7 @@ elif app_view == "Settings":
         logout_password = None
 
     if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        if st.session_state['current_user'] != "Daniel" and logout_password != LOGOUT_PASSWORD:
+        if st.session_state['current_user'] != dan_key and logout_password != LOGOUT_PASSWORD:
             st.error("Incorrect password. Access denied.")
         else:
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
