@@ -155,7 +155,7 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD ALL KEYS FROM SECRETS
+# LOAD ALL KEYS FROM SECRETS (no hardcoded fallbacks)
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -227,7 +227,7 @@ if 'goal_profiles' not in st.session_state:
     }
 
 # ══════════════════════════════════════════════════════════════
-# OBSIDIAN THEME CSS
+# OBSIDIAN THEME CSS (unchanged)
 # ══════════════════════════════════════════════════════════════
 css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -387,15 +387,18 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
 # MATH ENGINE & GLOBAL HELPERS
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
+
 def dclass(v, invert=False):
     if invert: v = -v
     return "c-ok" if v > 0 else ("c-err" if v < 0 else "c-neu")
+
 def eval_metric(metric, actual, profile):
     if metric == 'Muscle Mass (kg)':
         tgt, lower = profile[metric][:2]
         if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
         if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
         return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
+        
     tgt, lower, upper = profile[metric]
     if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
     if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
@@ -424,20 +427,33 @@ def traj_bar(label, actual, metric, profile, unit):
     tgt = profile[metric][0]
     s = sgn(actual); ts = sgn(tgt)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile)
+    
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), 0.1) * 2.5
         pos_min = min((abs(profile[metric][1]) / max_bound) * 100, 95)
         pos_tgt = min((abs(tgt) / max_bound) * 100, 95)
         bounds_html = f"<div style='position:relative; height:12px; font-family:\"JetBrains Mono\", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:2px;'><span style='position:absolute; left:{pos_min}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.1f}</span><span style='position:absolute; left:{pos_tgt}%; transform:translateX(-50%); color:var(--text-main); font-weight:700;'>TARGET {tgt:.1f}</span><span style='position:absolute; right:0;'>MAX ∞</span></div>"
     else:
+        # For Weight and Body Fat, use real values mapped to [-max_bound, +max_bound]
         max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), 0.1) * 2.5
-        pos_b1 = min((abs(profile[metric][1]) / max_bound) * 100, 95)
-        pos_tgt = min((abs(tgt) / max_bound) * 100, 95)
-        pos_b2 = min((abs(profile[metric][2]) / max_bound) * 100, 95)
-        bounds_html = f"<div style='position:relative; height:12px; font-family:\"JetBrains Mono\", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:2px;'><span style='position:absolute; left:{pos_b1}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.1f}</span><span style='position:absolute; left:{pos_tgt}%; transform:translateX(-50%); color:var(--text-main); font-weight:700;'>TARGET {tgt:.1f}</span><span style='position:absolute; left:{pos_b2}%; transform:translateX(-50%);'>MAX {profile[metric][2]:.1f}</span></div>"
+        def to_pct(val):
+            return (val + max_bound) / (2 * max_bound) * 100
+        
+        pos_lower = to_pct(profile[metric][1])
+        pos_tgt   = to_pct(tgt)
+        pos_upper = to_pct(profile[metric][2])
+        
+        bounds_html = f"""
+        <div style='position:relative; height:12px; font-family:"JetBrains Mono", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:2px;'>
+            <span style='position:absolute; left:{pos_lower}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.1f}</span>
+            <span style='position:absolute; left:{pos_tgt}%; transform:translateX(-50%); color:var(--text-main); font-weight:700;'>TARGET {tgt:.1f}</span>
+            <span style='position:absolute; left:{pos_upper}%; transform:translateX(-50%);'>MAX {profile[metric][2]:.1f}</span>
+        </div>"""
+        
     pct = min((abs(actual) / max_bound) * 100, 100)
     pct = max(pct, 2)
     bg_grad = get_gradient(metric, profile, max_bound)
+
     return f"<div class='tj-blk' style='margin-bottom: 1.5rem;'><div class='tj-row'><span class='tj-nm'>{label}</span><span class='tj-nn'>ACTUAL {s}{actual:.2f} | TARGET {ts}{tgt:.2f} {unit}</span></div><div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>{bounds_html}<div class='tj-st {c_txt}'>{status}</div></div>"
 
 # ══════════════════════════════════════════════════════════════
@@ -476,9 +492,11 @@ if has_enough_data:
     cutoff = df['Date'].max() - timedelta(days=45)
     recent_df = df[df['Date'] >= cutoff]
     if len(recent_df) < 4: recent_df = df.tail(5)
+
     recent_days  = recent_df['Date'].map(lambda d: (d - df['Date'].min()).days).values.reshape(-1, 1)
     future_days  = np.array([[(df['Date'].max() - df['Date'].min()).days + i] for i in range(1, 61)])
     future_dates = [df['Date'].max() + timedelta(days=i) for i in range(1, 61)]
+
     monthly_trends, traj_data = {}, {}
     for m in METRICS:
         model = LinearRegression().fit(recent_days, recent_df[m].values)
