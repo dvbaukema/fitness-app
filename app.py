@@ -203,16 +203,24 @@ if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
-# OBSIDIAN THEME CSS
+# OBSIDIAN THEME CSS (UPDATED FOR V38 - SPOTIFY TABS & OLED BLACK)
 # ══════════════════════════════════════════════════════════════
 css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 :root {
-    --bg-primary: #18181B; --text-main: #FFFFFF; --text-muted: rgba(255,255,255,0.5); --text-subtle: rgba(255,255,255,0.4);
-    --surface: rgba(255,255,255,0.04); --surface-active: rgba(255,255,255,0.12);
-    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.2);
-    --c-emerald: #10B981; --c-amber: #F59E0B; --c-rose: #EF4444; --c-blue: #3B82F6;
+    --bg-primary: #000000;      /* OLED Black */
+    --text-main: #FFFFFF; 
+    --text-muted: #A7A7A7;      /* Spotify Gray */
+    --text-subtle: #737373;
+    --surface: #121212;         /* Dark surface */
+    --surface-active: #282828;  /* Active hover surface */
+    --border: #2A2A2A;          /* Crisp border */
+    --border-strong: #3E3E3E;
+    --c-emerald: #10B981; 
+    --c-amber: #F59E0B; 
+    --c-rose: #EF4444; 
+    --c-blue: #3B82F6;
 }
 
 @media (prefers-color-scheme: light) {
@@ -238,11 +246,41 @@ css = """
 .quote-box { text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 1.5rem;}
 .quote-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; color: var(--text-main); font-style: italic; font-weight: 500; letter-spacing: 0.2px;}
 
+/* ── SPOTIFY STYLE PILL NAVIGATION ── */
 div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; }
-div[data-testid="stSegmentedControl"] > div { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; padding: 4px !important; }
-div[data-testid="stSegmentedControl"] label { font-size: 0.8rem !important; font-weight: 500 !important; color: var(--text-muted) !important; }
-div[data-testid="stSegmentedControl"] [aria-checked="true"] > div { background: var(--surface-active) !important; border-radius: 6px !important; }
-div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(--text-main) !important; font-weight: 600 !important;}
+div[data-testid="stSegmentedControl"] > div {
+    background-color: transparent !important;
+    border: none !important;
+    gap: 8px !important;
+    padding: 0 !important;
+}
+/* Individual Inactive Pill */
+div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"] {
+    background-color: var(--surface) !important;
+    border-radius: 24px !important;
+    border: 1px solid var(--border) !important;
+}
+/* Active Pill */
+div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
+    background-color: var(--text-main) !important;
+    border: none !important;
+}
+/* Label Formatting */
+div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"] label {
+    color: var(--text-muted) !important;
+    font-weight: 600 !important;
+    padding: 6px 14px !important;
+    font-size: 0.8rem !important;
+}
+/* Active Label Formatting */
+div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"][aria-checked="true"] label {
+    color: var(--bg-primary) !important;
+    font-weight: 800 !important;
+}
+/* Hide Native Streamlit Sliding Background */
+div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
+/* Hide secondary internal label divs */
+div[data-testid="stSegmentedControl"] [data-testid="stWidgetLabel"] { display: none; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
@@ -284,7 +322,7 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
-/* Selector Controls (Centering Fix) */
+/* Selector Controls */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -546,7 +584,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V37 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V38 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -670,7 +708,7 @@ elif app_view == "Trends":
         
         # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
-        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(255,255,255,0.15)', width=1), marker=dict(size=4, color='rgba(255,255,255,0.15)'), hoverinfo='skip'))
         
         # Active Data (After Start Epoch) - Solid Blue
         spec_recent = recent_dfs_for_plot[metric]
@@ -720,10 +758,10 @@ elif app_view == "Trends":
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=20, b=5), height=150, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
+            margin=dict(l=0, r=0, t=10, b=0), height=200, showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -780,7 +818,7 @@ elif app_view == "Analysis":
     if has_enough_comp_data:
         st.markdown(
             traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "kg/mo", mmt, bft),
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", mmt, bft),
             unsafe_allow_html=True
         )
 
@@ -817,20 +855,6 @@ elif app_view == "Analysis":
     
     for d in diags:
         st.markdown(d, unsafe_allow_html=True)
-
-    with st.expander("ℹ️ Active Protocol Parameters"):
-        w_t, w_min, w_max = ideal_rates['Weight (kg)']
-        m_t, m_min = ideal_rates['Muscle Mass (kg)'][:2]
-        bf_t, bf_min, bf_max = ideal_rates['Body Fat (%)']
-        
-        st.markdown(f"""
-        <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.6; font-family: 'JetBrains Mono', monospace;">
-        <b>WEIGHT:</b> Target {w_t:+.2f} kg/mo | Range: [{w_min:+.2f}, {w_max:+.2f}]<br>
-        <b>MUSCLE:</b> Target {m_t:+.2f} kg/mo | Minimum: {m_min:+.2f}<br>
-        <b>FAT:</b> Target {bf_t:+.2f} %/mo | Range: [{bf_min:+.2f}, {bf_max:+.2f}]<br>
-        <br><span style="font-family:'Inter', sans-serif;"><i>Note: Base parameters are hardcoded in the Python core. Change protocol using the main dropdown.</i></span>
-        </div>
-        """, unsafe_allow_html=True)
 
     if st.session_state.get('enable_achievements', True):
         start_gym_time = st.session_state['gym_start_date']
@@ -914,6 +938,20 @@ elif app_view == "Settings":
 
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:1rem; font-weight:700; color:var(--text-main); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
+
+    with st.expander("ℹ️ Active Protocol Parameters"):
+        w_t, w_min, w_max = ideal_rates['Weight (kg)']
+        m_t, m_min = ideal_rates['Muscle Mass (kg)'][:2]
+        bf_t, bf_min, bf_max = ideal_rates['Body Fat (%)']
+        
+        st.markdown(f"""
+        <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.6; font-family: 'JetBrains Mono', monospace;">
+        <b>WEIGHT:</b> Target {w_t:+.2f} kg/mo | Range: [{w_min:+.2f}, {w_max:+.2f}]<br>
+        <b>MUSCLE:</b> Target {m_t:+.2f} kg/mo | Minimum: {m_min:+.2f}<br>
+        <b>FAT:</b> Target {bf_t:+.2f} %/mo | Range: [{bf_min:+.2f}, {bf_max:+.2f}]<br>
+        <br><span style="font-family:'Inter', sans-serif;"><i>Note: Base parameters are hardcoded in the Python core. Change protocol using the main dropdown.</i></span>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
     st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state.get('enable_quotes', True))
