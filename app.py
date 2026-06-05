@@ -249,7 +249,7 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 
 .chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem; }
 .chart-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0px; }
-.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
+.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 4px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
 
 .hud-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
 .hud-icon { font-size: 1.2rem; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
@@ -393,12 +393,12 @@ def traj_bar(label, actual, metric, profile, unit):
     
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.2f}</span><span>MAX ∞</span></div>"
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.1f}</span><span>MAX ∞</span></div>"
     else:
         max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), abs(actual), 0.1) * 1.3
         min_val = min(profile[metric][1], profile[metric][2])
         max_val = max(profile[metric][1], profile[metric][2])
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {min_val:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.2f}</span><span>MAX {max_val:.2f}</span></div>"
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {min_val:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.1f}</span><span>MAX {max_val:.1f}</span></div>"
         
     pct = ((actual + max_bound) / (2 * max_bound)) * 100
     pct = max(min(pct, 98), 2)
@@ -441,40 +441,44 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
-# ── EXPONENTIAL MOVING AVERAGE (EMA) FILTERING ──
-# Filters out daily scale impedance noise before running regression
-cutoff = df['Date'].max() - timedelta(days=60)
-df_window = df[df['Date'] >= cutoff].copy()
-df_history = df[df['Date'] < cutoff].copy()
+# ── MATHEMATICAL ENGINE (RAW DATA REGRESSION) ──
+has_enough_weight_data = len(df) >= 3
+has_enough_comp_data = len(df) >= 5
 
 monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
-if len(df_window) >= 3:
-    df_window['Weight_EMA'] = df_window['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
-    X_w = df_window['Date'].map(lambda d: (d - df_window['Date'].min()).days).values.reshape(-1, 1)
-    y_w = df_window['Weight_EMA'].values
+# Calculate a 90-day window to capture ~12 weekly weigh-ins perfectly
+cutoff = df['Date'].max() - timedelta(days=90)
+df_window_full = df[df['Date'] >= cutoff].copy()
+
+if has_enough_weight_data:
+    df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
+    recent_dfs_for_plot['Weight (kg)'] = df_w 
+    
+    X_w = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values.reshape(-1, 1)
+    y_w = df_w['Weight (kg)'].values
     model_w = LinearRegression().fit(X_w, y_w)
     
     monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30  # kg/mo
     
-    future_days_w  = np.array([[(df_window['Date'].max() - df_window['Date'].min()).days + i] for i in range(1, 31)])
-    future_dates_w = [df_window['Date'].max() + timedelta(days=i) for i in range(1, 31)]
-    traj_data['Weight (kg)'] = {'dates': list(df_window['Date']) + future_dates_w, 'preds': model_w.predict(np.vstack((X_w, future_days_w)))}
+    future_days_w  = np.array([[(df_w['Date'].max() - df_w['Date'].min()).days + i] for i in range(1, 31)])
+    future_dates_w = [df_w['Date'].max() + timedelta(days=i) for i in range(1, 31)]
+    traj_data['Weight (kg)'] = {'dates': list(df_w['Date']) + future_dates_w, 'preds': model_w.predict(np.vstack((X_w, future_days_w)))}
 
-if len(df_window) >= 5:
-    df_window['Muscle_EMA'] = df_window['Muscle Mass (kg)'].ewm(alpha=0.05, adjust=False).mean()
-    df_window['BodyFat_EMA'] = df_window['Body Fat (%)'].ewm(alpha=0.03, adjust=False).mean()
+if has_enough_comp_data:
+    df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5)
+    X_c = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values.reshape(-1, 1)
+    future_days_c  = np.array([[(df_c['Date'].max() - df_c['Date'].min()).days + i] for i in range(1, 31)])
+    future_dates_c = [df_c['Date'].max() + timedelta(days=i) for i in range(1, 31)]
     
-    X_c = df_window['Date'].map(lambda d: (d - df_window['Date'].min()).days).values.reshape(-1, 1)
-    future_days_c  = np.array([[(df_window['Date'].max() - df_window['Date'].min()).days + i] for i in range(1, 31)])
-    future_dates_c = [df_window['Date'].max() + timedelta(days=i) for i in range(1, 31)]
-    
-    for m, ema_col in [('Muscle Mass (kg)', 'Muscle_EMA'), ('Body Fat (%)', 'BodyFat_EMA')]:
-        y_c = df_window[ema_col].values
+    for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
+        recent_dfs_for_plot[m] = df_c
+        y_c = df_c[m].values
         model_c = LinearRegression().fit(X_c, y_c)
         monthly_trends[m] = model_c.coef_[0] * 30 # per month
-        traj_data[m] = {'dates': list(df_window['Date']) + future_dates_c, 'preds': model_c.predict(np.vstack((X_c, future_days_c)))}
+        traj_data[m] = {'dates': list(df_c['Date']) + future_dates_c, 'preds': model_c.predict(np.vstack((X_c, future_days_c)))}
+
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -491,7 +495,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V28 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V30 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -567,13 +571,13 @@ if app_view == "Entry":
 
 elif app_view == "Trends":
     header_placeholder.empty()
-    if len(df_window) < 3:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for trends. Currently: {len(df_window)}/3."), unsafe_allow_html=True)
+    if not has_enough_weight_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for trends. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
-        if metric != 'Weight (kg)' and len(df_window) < 5:
+        if metric != 'Weight (kg)' and not has_enough_comp_data:
             continue
             
         last_val = df.iloc[-1][metric]
@@ -596,23 +600,21 @@ elif app_view == "Trends":
         fig = go.Figure()
         
         # Raw historical data
-        fig.add_trace(go.Scatter(x=df_history['Date'], y=df_history[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.2)', width=1), hoverinfo='skip'))
+        df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
+        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.2)', width=1), hoverinfo='skip'))
         
-        # Raw Data Points fed into the filter
-        fig.add_trace(go.Scatter(x=df_window['Date'], y=df_window[metric], mode='markers', name='Raw Data', marker=dict(size=4, color='rgba(59, 130, 246, 0.4)'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
-        
-        # EMA Filtered Trendline
-        ema_col = 'Weight_EMA' if metric == 'Weight (kg)' else ('Muscle_EMA' if metric == 'Muscle Mass (kg)' else 'BodyFat_EMA')
-        fig.add_trace(go.Scatter(x=df_window['Date'], y=df_window[ema_col], mode='lines', name='Filtered Trend', line=dict(color='#3B82F6', width=2.5), hoverinfo='skip'))
+        # Raw Data Points fed into the regression
+        spec_recent = recent_dfs_for_plot[metric]
+        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Recent', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
         # Regression Trajectory Path
         fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
         
-        # Ideal Target Path (Extrapolated from current EMA)
-        last_filtered = df_window.iloc[-1][ema_col]
+        # Ideal Target Path 
+        last_filtered = spec_recent.iloc[-1][metric]
         daily_rate = ideal_rates[metric][0] / 30.0
         ideal_vals = [last_filtered] + [last_filtered + daily_rate * x for x in range(1, 31)]
-        fig.add_trace(go.Scatter(x=[df_window['Date'].max()] + traj_data[metric]['dates'][-30:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[spec_recent['Date'].max()] + traj_data[metric]['dates'][-30:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -626,8 +628,8 @@ elif app_view == "Trends":
 
 elif app_view == "Analysis":
     header_placeholder.empty()
-    if len(df_window) < 3:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df_window)}/3."), unsafe_allow_html=True)
+    if not has_enough_weight_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     last = df.iloc[-1]
@@ -635,15 +637,15 @@ elif app_view == "Analysis":
     wt = monthly_trends.get('Weight (kg)', 0)
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates)
 
-    if len(df_window) >= 5:
+    if has_enough_comp_data:
         bft, mmt = monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
         c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
         c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
         bf_disp = f"""<div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>"""
         mm_disp = f"""<div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>"""
     else:
-        bf_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df_window)}/5)</div>"""
-        mm_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df_window)}/5)</div>"""
+        bf_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
+        mm_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
 
     st.markdown(f"""
     <div class="s-head" style="margin-top:0;">Performance Data</div>
@@ -668,7 +670,7 @@ elif app_view == "Analysis":
     """, unsafe_allow_html=True)
 
     st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo"), unsafe_allow_html=True)
-    if len(df_window) >= 5:
+    if has_enough_comp_data:
         st.markdown(
             traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
             traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
@@ -687,7 +689,7 @@ elif app_view == "Analysis":
         else:
             diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
     
-    if len(df_window) >= 5:
+    if has_enough_comp_data:
         m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
         bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
         if wt >= w_lower and mmt < m_lower:
@@ -827,7 +829,6 @@ elif app_view == "Settings":
             system_alert("SYSTEM CONFIGURATION SAVED")
             st.rerun()
 
-    # ── ADMIN CONTROL (only for admin) ──
     if st.session_state.get('is_admin'):
         st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
         if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
