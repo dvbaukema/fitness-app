@@ -36,20 +36,44 @@ def system_alert(message, kind="ok"):
     ph.empty()
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN FROM HOME SCREEN (localStorage)
+# HARDCODED PROTOCOL TARGETS (EDIT THESE PERMANENTLY HERE)
+# ══════════════════════════════════════════════════════════════
+# Format: 'Metric': [Target, Lower Bound, Upper Bound]
+DEFAULT_PROFILES = {
+    "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
+    "Lean Cut":        {'Weight (kg)': [-1.5, -2.0, -1.0], 'Muscle Mass (kg)': [0.0, -0.1],  'Body Fat (%)': [-0.6, -1.0, -0.3]},
+    "Recomposition":   {'Weight (kg)': [0.0, -0.5, 0.5],   'Muscle Mass (kg)': [0.3, 0.1],   'Body Fat (%)': [-0.4, -0.8, -0.1]},
+    "Lean Bulk":       {'Weight (kg)': [1.0, 0.5, 1.5],    'Muscle Mass (kg)': [0.6, 0.3],   'Body Fat (%)': [0.1, -0.1, 0.4]},
+    "Aggressive Bulk": {'Weight (kg)': [2.5, 2.0, 3.5],    'Muscle Mass (kg)': [0.8, 0.5],   'Body Fat (%)': [0.6, 0.3, 1.0]},
+}
+
+# ══════════════════════════════════════════════════════════════
+# AUTO‑LOGIN & PERMANENT STORAGE ENGINE (localStorage)
 # ══════════════════════════════════════════════════════════════
 st.markdown("""
 <script>
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.has('user')) {
-        const savedUser = localStorage.getItem('metrics_user');
-        if (savedUser) {
-            const newUrl = window.location.origin + window.location.pathname + '?user=' + savedUser;
-            window.location.replace(newUrl);
-        }
-    } else {
-        localStorage.setItem('metrics_user', urlParams.get('user'));
+    let redirect = false;
+    
+    // Sync User
+    const savedUser = localStorage.getItem('metrics_user');
+    if (savedUser && !urlParams.has('user')) { urlParams.set('user', savedUser); redirect = true; } 
+    else if (urlParams.has('user')) { localStorage.setItem('metrics_user', urlParams.get('user')); }
+    
+    // Sync Goal Protocol
+    const savedGoal = localStorage.getItem('metrics_goal');
+    if (savedGoal && !urlParams.has('goal')) { urlParams.set('goal', savedGoal); redirect = true; } 
+    else if (urlParams.has('goal')) { localStorage.setItem('metrics_goal', urlParams.get('goal')); }
+    
+    // Sync Analysis Start Date
+    const savedStart = localStorage.getItem('metrics_start');
+    if (savedStart && !urlParams.has('start')) { urlParams.set('start', savedStart); redirect = true; } 
+    else if (urlParams.has('start')) { localStorage.setItem('metrics_start', urlParams.get('start')); }
+
+    if (redirect) {
+        const newUrl = window.location.origin + window.location.pathname + '?' + urlParams.toString();
+        window.location.replace(newUrl);
     }
 })();
 </script>
@@ -63,8 +87,7 @@ def get_google_sheets_service():
     try:
         credentials_dict = dict(st.secrets["gcp_service_account"])
         creds = service_account.Credentials.from_service_account_info(
-            credentials_dict,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
+            credentials_dict, scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         return build('sheets', 'v4', credentials=creds)
     except Exception:
@@ -129,21 +152,25 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
     except HttpError:
         return False
 
-def delete_row_from_gsheet(sheet_url, row_index_to_delete):
+def overwrite_gsheet(sheet_url, df):
+    # This is the 100% safe way to delete rows. It mirrors the exact cleaned dataframe back to the sheet.
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        sheet_row_index = row_index_to_delete + 1 
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
-
-        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
-        body = {'requests': requests}
-        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
+        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='A:Z').execute()
+        headers = ['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']
+        values = [headers]
+        for _, row in df.iterrows():
+            date_val = pd.Timestamp(row['Date'])
+            values.append([date_val.strftime('%Y-%m-%d'), date_val.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
+        body = {'values': values}
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', body=body).execute()
         return True
     except HttpError:
         return False
+
 
 # ══════════════════════════════════════════════════════════════
 # LOAD SECRETS & DIRECTORY
@@ -174,7 +201,7 @@ DEFAULT_QUOTES = [
 ]
 
 # ══════════════════════════════════════════════════════════════
-# INITIALIZE SESSION STATE
+# INITIALIZE SESSION STATE & QUERY PARAMS
 # ══════════════════════════════════════════════════════════════
 if 'users' not in st.session_state: st.session_state['users'] = USER_DATA
 if 'auth_status' not in st.session_state: st.session_state['auth_status'] = False
@@ -186,15 +213,14 @@ if 'all_quotes' not in st.session_state: st.session_state['all_quotes'] = DEFAUL
 if 'enable_quotes' not in st.session_state: st.session_state['enable_quotes'] = True
 if 'enable_achievements' not in st.session_state: st.session_state['enable_achievements'] = True
 if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = datetime(2026, 3, 17).date()
+if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
-if 'goal_profiles' not in st.session_state:
-    st.session_state['goal_profiles'] = {
-        "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
-        "Lean Cut":        {'Weight (kg)': [-1.5, -2.0, -1.0], 'Muscle Mass (kg)': [0.0, -0.1],  'Body Fat (%)': [-0.6, -1.0, -0.3]},
-        "Recomposition":   {'Weight (kg)': [0.0, -0.5, 0.5],   'Muscle Mass (kg)': [0.3, 0.1],   'Body Fat (%)': [-0.4, -0.8, -0.1]},
-        "Lean Bulk":       {'Weight (kg)': [1.0, 0.5, 1.5],    'Muscle Mass (kg)': [0.6, 0.3],   'Body Fat (%)': [0.1, -0.1, 0.4]},
-        "Aggressive Bulk": {'Weight (kg)': [2.5, 2.0, 3.5],    'Muscle Mass (kg)': [0.8, 0.5],   'Body Fat (%)': [0.6, 0.3, 1.0]},
-    }
+# Sync URL to Session State
+if 'current_goal' not in st.session_state: 
+    st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
+if 'analysis_start_date' not in st.session_state:
+    default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+    st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
 
 # ══════════════════════════════════════════════════════════════
 # OBSIDIAN THEME CSS
@@ -278,7 +304,6 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
-/* Selector Controls (Centering Fix) */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -393,12 +418,12 @@ def traj_bar(label, actual, metric, profile, unit):
     
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.1f}</span><span>MAX ∞</span></div>"
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.2f}</span><span>MAX ∞</span></div>"
     else:
         max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), abs(actual), 0.1) * 1.3
         min_val = min(profile[metric][1], profile[metric][2])
         max_val = max(profile[metric][1], profile[metric][2])
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {min_val:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.1f}</span><span>MAX {max_val:.1f}</span></div>"
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {min_val:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.2f}</span><span>MAX {max_val:.2f}</span></div>"
         
     pct = ((actual + max_bound) / (2 * max_bound)) * 100
     pct = max(min(pct, 98), 2)
@@ -441,18 +466,19 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
-# ── MATHEMATICAL ENGINE (RAW DATA REGRESSION) ──
-has_enough_weight_data = len(df) >= 3
-has_enough_comp_data = len(df) >= 5
+# ── MATHEMATICAL ENGINE (MANUAL START DATE & RAW REGRESSION) ──
+# Filters data starting from the user's selected Analysis Start Date
+analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
+df_window_full = df[df['Date'] >= analysis_start].copy()
+
+has_enough_weight_data = len(df_window_full) >= 3 or len(df) >= 3
+has_enough_comp_data = len(df_window_full) >= 5 or len(df) >= 5
 
 monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
-# Calculate a 90-day window to capture ~12 weekly weigh-ins perfectly
-cutoff = df['Date'].max() - timedelta(days=90)
-df_window_full = df[df['Date'] >= cutoff].copy()
-
 if has_enough_weight_data:
+    # If the custom window has fewer than 3 points, fallback to the last 3 points in entire dataset
     df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
     recent_dfs_for_plot['Weight (kg)'] = df_w 
     
@@ -479,12 +505,15 @@ if has_enough_comp_data:
         monthly_trends[m] = model_c.coef_[0] * 30 # per month
         traj_data[m] = {'dates': list(df_c['Date']) + future_dates_c, 'preds': model_c.predict(np.vstack((X_c, future_days_c)))}
 
-
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
+# Sync Protocol from URL parameters dynamically
+if "goal" in st.query_params:
+    st.session_state['current_goal'] = st.query_params.get("goal")
+
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
-ideal_rates = GOAL_PROFILES[active_goal]
+ideal_rates = GOAL_PROFILES.get(active_goal, GOAL_PROFILES['Lean Bulk'])
 
 header_placeholder = st.empty()
 app_view = st.segmented_control("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"],
@@ -495,7 +524,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V30 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V31 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -506,7 +535,12 @@ if app_view == "Entry":
             st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
         st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['daily_quote']}\"</div></div>", unsafe_allow_html=True)
 
-    st.session_state['current_goal'] = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
+    # Automatically saves protocol selection to URL for persistence
+    selected = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
+    if selected != st.session_state['current_goal']:
+        st.session_state['current_goal'] = selected
+        st.query_params.goal = selected
+        st.rerun()
     
     if len(df) > 0:
         last = df.iloc[-1]
@@ -574,6 +608,9 @@ elif app_view == "Trends":
     if not has_enough_weight_data:
         st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for trends. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
+        
+    if len(df_window_full) < 3:
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
@@ -599,7 +636,7 @@ elif app_view == "Trends":
         
         fig = go.Figure()
         
-        # Raw historical data
+        # Raw historical data (outside the analysis window)
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
         fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.2)', width=1), hoverinfo='skip'))
         
@@ -613,8 +650,8 @@ elif app_view == "Trends":
         # Ideal Target Path 
         last_filtered = spec_recent.iloc[-1][metric]
         daily_rate = ideal_rates[metric][0] / 30.0
-        ideal_vals = [last_filtered] + [last_filtered + daily_rate * x for x in range(1, 31)]
-        fig.add_trace(go.Scatter(x=[spec_recent['Date'].max()] + traj_data[metric]['dates'][-30:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+        ideal_vals = [last_filtered] + [last_filtered + daily_rate * x for x in range(1, 61)]
+        fig.add_trace(go.Scatter(x=[spec_recent['Date'].max()] + traj_data[metric]['dates'][-60:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -631,6 +668,9 @@ elif app_view == "Analysis":
     if not has_enough_weight_data:
         st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
+
+    if len(df_window_full) < 3:
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     last = df.iloc[-1]
     w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
@@ -774,8 +814,9 @@ elif app_view == "Data":
         with c2:
             if pd.Timestamp(row['Date']) >= seven_days_ago:
                 if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    delete_row_from_gsheet(st.session_state['sheet_url'], i)
-                    st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
+                    new_df = df.drop(index=i).reset_index(drop=True)
+                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
+                    st.session_state['active_df'] = new_df
                     load_data.clear()
                     system_alert("RECORD PURGED", "err")
                     st.rerun()
@@ -801,43 +842,23 @@ elif app_view == "Settings":
                     system_alert("QUOTE INJECTED")
                     st.rerun()
 
-    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem;">Protocol Configuration</div>', unsafe_allow_html=True)
-    edit_goal = st.selectbox("Select Protocol to Modify", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
-    p = GOAL_PROFILES[edit_goal]
-    with st.form("settings_form", border=False):
-        st.markdown(f"<div class='s-head'>Weight Trajectory (kg/mo)</div>", unsafe_allow_html=True)
-        w_tgt = st.slider("Target", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][0]), step=0.1)
-        w_min = st.slider("Lower Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][1]), step=0.1)
-        w_max = st.slider("Upper Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][2]), step=0.1)
-        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Muscle Mass Trajectory (kg/mo)</div>", unsafe_allow_html=True)
-        m_tgt = st.slider("Target ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][0]), step=0.1)
-        m_min = st.slider("Lower Bound ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][1]), step=0.1)
-        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Body Fat Trajectory (%/mo)</div>", unsafe_allow_html=True)
-        bf_tgt = st.slider("Target  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][0]), step=0.1)
-        bf_min = st.slider("Lower Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][1]), step=0.1)
-        bf_max = st.slider("Upper Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][2]), step=0.1)
-        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Achievements Engine Start Date</div>", unsafe_allow_html=True)
-        new_start = st.date_input("Start Date", value=st.session_state['gym_start_date'])
-        
-        if st.form_submit_button("SAVE PROTOCOL & SETTINGS", use_container_width=True):
-            st.session_state['goal_profiles'][edit_goal] = {
-                'Weight (kg)': [w_tgt, w_min, w_max],
-                'Muscle Mass (kg)': [m_tgt, m_min],
-                'Body Fat (%)': [bf_tgt, bf_min, bf_max]
-            }
-            st.session_state['gym_start_date'] = new_start
-            system_alert("SYSTEM CONFIGURATION SAVED")
-            st.rerun()
+    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem;">Data Analysis Limits</div>', unsafe_allow_html=True)
+    new_analysis_start = st.date_input("Trend Analysis Start Date", value=st.session_state['analysis_start_date'])
+    
+    if st.button("SAVE DATE & RE-CALIBRATE"):
+        st.session_state['analysis_start_date'] = new_analysis_start
+        st.query_params.start = new_analysis_start.strftime('%Y-%m-%d')
+        system_alert("ENGINE RE-CALIBRATED")
+        st.rerun()
 
-    if st.session_state.get('is_admin'):
-        st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
-        if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-            st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
-            st.session_state['auth_status'] = False
-            st.session_state['current_user'] = None
-            st.session_state['sheet_url'] = ""
-            if 'active_df' in st.session_state:
-                del st.session_state['active_df']
-            st.query_params.user = admin_key
-            st.cache_data.clear()
-            st.rerun()
+    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
+    if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
+        st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
+        st.session_state['auth_status'] = False
+        st.session_state['current_user'] = None
+        st.session_state['sheet_url'] = ""
+        if 'active_df' in st.session_state:
+            del st.session_state['active_df']
+        st.query_params.clear()
+        st.cache_data.clear()
+        st.rerun()
