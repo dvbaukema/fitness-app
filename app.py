@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import random
 import re
 from sklearn.linear_model import LinearRegression
+import scipy.stats as stats
 from datetime import datetime, timedelta
 import time
 from google.oauth2 import service_account
@@ -283,6 +284,7 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
+/* Selector Controls (Centering Fix) */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -400,7 +402,7 @@ def get_gradient(metric, profile, max_mag, is_smart_override=False):
 def hud_card(kind, icon, title, desc):
     return f"<div class='hud-card' style='border-left: 3px solid var(--{kind});'><div class='hud-icon {kind}'>{icon}</div><div><div class='hud-title {kind}'>{title}</div><div class='hud-desc'>{desc}</div></div></div>"
 
-def traj_bar(label, actual_rate, metric, profile, unit, current_val, days_to_end, end_date_label, mmt=None, bft=None):
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     tgt_rate = profile[metric][0]
     s = sgn(actual_rate); ts = sgn(tgt_rate)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
@@ -409,33 +411,26 @@ def traj_bar(label, actual_rate, metric, profile, unit, current_val, days_to_end
     if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
     if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
 
-    proj_val = current_val + (actual_rate * (max(0, days_to_end) / 30.0))
-    proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.65rem; color:var(--c-blue); font-weight:700; margin-top: 4px;'>{end_date_label} PROJ: {proj_val:.1f}</div>"
-
+    # Perfect CSS Grid layout for overlapping text issue
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
-        p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        
-        bounds_html = f"<div style='position:relative; height:18px; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span><span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='position:absolute; right:0;'>MAX ∞</span></div>"
+        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span></div>"
     else:
         max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
-        p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        p_u = max(min(((profile[metric][2] + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        
-        bounds_html = f"<div style='position:relative; height:18px; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span><span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='position:absolute; left:{p_u}%; transform:translateX(-50%);'>MAX {profile[metric][2]:.2f}</span></div>"
+        min_val = min(profile[metric][1], profile[metric][2])
+        max_val = max(profile[metric][1], profile[metric][2])
+        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='text-align:left;'>MIN {min_val:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX {max_val:.2f}</span></div>"
         
     pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
     pct = max(min(pct, 98), 2)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    html_block = f"<div class='tj-blk' style='margin-bottom: 2.5rem;'><div class='tj-row' style='margin-bottom:8px;'><span class='tj-nm'>{label}</span><div style='text-align:right;'><div style='font-family:\"JetBrains Mono\", monospace; font-size:1.1rem; font-weight:800; color:var(--text-main); line-height:1;'>{s}{actual_rate:.2f} <span style='font-size:0.7rem; color:var(--text-muted);'>{unit}</span></div>{proj_html}</div></div><div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>{bounds_html}<div class='tj-st {c_txt}'>{status}</div></div>"
+    html_block = f"<div class='tj-blk' style='margin-bottom: 2.5rem;'><div class='tj-row' style='margin-bottom:8px;'><span class='tj-nm'>{label}</span><div style='text-align:right;'><div style='font-family:\"JetBrains Mono\", monospace; font-size:1.1rem; font-weight:800; color:var(--text-main); line-height:1;'>{s}{actual_rate:.2f} <span style='font-size:0.7rem; color:var(--text-muted);'>{unit}</span></div></div></div><div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>{bounds_html}<div class='tj-st {c_txt}'>{status}</div></div>"
     return html_block
 
 
 # ══════════════════════════════════════════════════════════════
-# DATA LOADING
+# DATA LOADING & STATISTICAL ENGINE
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url):
@@ -458,7 +453,6 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
-# ── MATHEMATICAL ENGINE (MANUAL START DATE & RAW REGRESSION) ──
 analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
@@ -475,21 +469,39 @@ if has_enough_weight_data:
     df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
     recent_dfs_for_plot['Weight (kg)'] = df_w 
     
-    X_w = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values.reshape(-1, 1)
+    X_w_raw = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values
+    X_w = X_w_raw.reshape(-1, 1)
     y_w = df_w['Weight (kg)'].values
-    model_w = LinearRegression().fit(X_w, y_w)
-    monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30  # kg/mo
+    
+    # Regression & Confidence Intervals
+    res_w = stats.linregress(X_w_raw, y_w)
+    slope_w = res_w.slope
+    stderr_w = res_w.stderr
+    
+    monthly_trends['Weight (kg)'] = slope_w * 30 
     
     start_day_w = (df_w['Date'].min() - df_w['Date'].min()).days
     days_to_end_w = (target_end_date.date() - df_w['Date'].min().date()).days
     if days_to_end_w > 0:
         future_days_w  = np.array([[start_day_w + i] for i in range(0, days_to_end_w + 10)])
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
-        traj_data['Weight (kg)'] = {'dates': future_dates_w, 'preds': model_w.predict(future_days_w)}
+        
+        # Calculate Error Cone
+        pred_y_w = res_w.intercept + slope_w * future_days_w.flatten()
+        margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96 # 95% CI
+        
+        traj_data['Weight (kg)'] = {
+            'dates': future_dates_w, 
+            'preds': pred_y_w,
+            'upper': pred_y_w + margin_of_error_w,
+            'lower': pred_y_w - margin_of_error_w,
+            'final_error': margin_of_error_w[-10] # Error exactly on Target Date
+        }
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5)
-    X_c = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values.reshape(-1, 1)
+    X_c_raw = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values
+    X_c = X_c_raw.reshape(-1, 1)
     
     days_to_end_c = (target_end_date.date() - df_c['Date'].min().date()).days
     if days_to_end_c > 0:
@@ -500,9 +512,23 @@ if has_enough_comp_data:
         for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
             recent_dfs_for_plot[m] = df_c
             y_c = df_c[m].values
-            model_c = LinearRegression().fit(X_c, y_c)
-            monthly_trends[m] = model_c.coef_[0] * 30 # per month
-            traj_data[m] = {'dates': future_dates_c, 'preds': model_c.predict(future_days_c)}
+            
+            res_c = stats.linregress(X_c_raw, y_c)
+            slope_c = res_c.slope
+            stderr_c = res_c.stderr
+            
+            monthly_trends[m] = slope_c * 30
+            
+            pred_y_c = res_c.intercept + slope_c * future_days_c.flatten()
+            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96 # 95% CI
+            
+            traj_data[m] = {
+                'dates': future_dates_c, 
+                'preds': pred_y_c,
+                'upper': pred_y_c + margin_of_error_c,
+                'lower': pred_y_c - margin_of_error_c,
+                'final_error': margin_of_error_c[-10]
+            }
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -520,7 +546,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V36 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V37 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -609,7 +635,8 @@ elif app_view == "Trends":
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
-        if metric != 'Weight (kg)' and not has_enough_comp_data: continue
+        if metric != 'Weight (kg)' and not has_enough_comp_data:
+            continue
             
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
@@ -617,24 +644,35 @@ elif app_view == "Trends":
         target = ideal_rates[metric][0]
         c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
         
+        # Pull the final calculated value & standard error
+        if 'preds' in traj_data.get(metric, {}):
+            final_pred = traj_data[metric]['preds'][-10] # Target date
+            final_error = traj_data[metric]['final_error']
+            proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{final_pred:.1f} {unit}</span> <span style='color:var(--text-muted);'>±{final_error:.1f}</span></div>"
+        else:
+            proj_html = ""
+        
         st.markdown(f"""
         <div class="chart-blk">
-            <div class="chart-meta">
-                <div style="font-size:0.75rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f} <span style="font-size:0.6rem; color:var(--text-muted);">{unit}</span></span></div>
+            <div class="chart-meta" style="align-items: flex-start;">
                 <div>
-                    <span class="t-chip {c_bg} {c_txt}">ACTUAL {sgn(trend)}{trend:.2f} /mo</span>
-                    <span class="t-chip" style="background:rgba(150,150,150,0.15); margin-left:4px;">TARGET {sgn(target)}{target:.2f} /mo</span>
+                    <div style="font-size:0.75rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f} <span style="font-size:0.6rem; color:var(--text-muted);">{unit}</span></span></div>
+                    {proj_html}
+                </div>
+                <div style="text-align: right;">
+                    <span class="t-chip {c_bg} {c_txt}" style="margin-bottom:4px;">ACTUAL {sgn(trend)}{trend:.2f} /mo</span><br>
+                    <span class="t-chip bg-neu c-neu">TARGET {sgn(target)}{target:.2f} /mo</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
         fig = go.Figure()
         
-        # Historical Data (Faded Grey)
+        # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
         fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
         
-        # Active Data (Solid Blue)
+        # Active Data (After Start Epoch) - Solid Blue
         spec_recent = recent_dfs_for_plot[metric]
         fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
@@ -668,9 +706,17 @@ elif app_view == "Trends":
             # Target Path
             fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
-        # Regression Trajectory Path
+        # Regression Trajectory Path w/ Error Cone (Confidence Interval)
         if 'dates' in traj_data.get(metric, {}):
-            fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+            x_vals = traj_data[metric]['dates']
+            y_upper = traj_data[metric]['upper']
+            y_lower = traj_data[metric]['lower']
+            
+            # Fill Area for Confidence Interval
+            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(255,255,255,0.05)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
+            
+            # Regression Line
+            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -730,13 +776,11 @@ elif app_view == "Analysis":
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    days_to_target = (target_end_date.date() - datetime.now().date()).days
-
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo", w, days_to_target, end_label, mmt, bft), unsafe_allow_html=True)
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo", mmt, bft), unsafe_allow_html=True)
     if has_enough_comp_data:
         st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mm, days_to_target, end_label, mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", bf, days_to_target, end_label, mmt, bft),
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", mmt, bft),
             unsafe_allow_html=True
         )
 
@@ -859,9 +903,8 @@ elif app_view == "Data":
         with c2:
             if pd.Timestamp(row['Date']) >= seven_days_ago:
                 if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    new_df = df.drop(index=i).reset_index(drop=True)
-                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
-                    st.session_state['active_df'] = new_df
+                    delete_row_from_gsheet(st.session_state['sheet_url'], i)
+                    st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
                     load_data.clear()
                     system_alert("RECORD PURGED", "err")
                     st.rerun()
@@ -891,7 +934,7 @@ elif app_view == "Settings":
     
     c1, c2 = st.columns(2)
     with c1:
-        new_analysis_start = st.date_input("Trend Analysis Start Date", value=st.session_state['analysis_start_date'], help="The Math Engine will only calculate your kg/mo pace using data AFTER this date.")
+        new_analysis_start = st.date_input("Trend Analysis Start", value=st.session_state['analysis_start_date'], help="The Math Engine will only calculate your pace using data AFTER this date.")
     with c2:
         new_target_end = st.date_input("Target End Date", value=st.session_state['target_end_date'], help="The date your target trajectory is aiming for.")
     
