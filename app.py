@@ -130,31 +130,15 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
         return False
 
 def delete_row_from_gsheet(sheet_url, row_index_to_delete):
-    """Deletes a specific row index (0-based relative to data) from the sheet. Assumes row 1 is headers."""
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        # row_index_to_delete is 0-based dataframe index. Google Sheets is 1-based, and row 1 is headers.
-        # So dataframe index 0 = Sheet Row 2.
         sheet_row_index = row_index_to_delete + 1 
-        
-        # Need sheetId of the first tab (usually 0) to use batchUpdate DeleteDimension
         sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
 
-        requests = [
-            {
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": tab_id,
-                        "dimension": "ROWS",
-                        "startIndex": sheet_row_index,
-                        "endIndex": sheet_row_index + 1
-                    }
-                }
-            }
-        ]
+        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
         body = {'requests': requests}
         service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
         return True
@@ -296,7 +280,6 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
-/* Remove margin below selectbox so Validation HUD sits flush */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -410,6 +393,7 @@ def traj_bar(label, actual, metric, profile, unit):
     s = sgn(actual); ts = sgn(tgt)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile)
     
+    # ── EMA SMOOTHING & DYNAMIC TRACK SCALING ──
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
         bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt:.1f}</span><span>MAX ∞</span></div>"
@@ -436,7 +420,7 @@ def traj_bar(label, actual, metric, profile, unit):
     </div>"""
 
 # ══════════════════════════════════════════════════════════════
-# DATA LOADING
+# DATA PROCESSING & EXPONENTIAL MOVING AVERAGE (EMA) ENGINE
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url):
@@ -459,7 +443,13 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
-# EXACT Model Constraints
+# ── MATHEMATICAL ENGINE UPGRADE (EMA FILTERING) ──
+# To prevent wild trendline swinging, apply EMA before regression.
+df_smoothed = df.copy()
+df_smoothed['Weight (kg)'] = df['Weight (kg)'].ewm(span=7, adjust=False).mean()
+df_smoothed['Muscle Mass (kg)'] = df['Muscle Mass (kg)'].ewm(span=14, adjust=False).mean()
+df_smoothed['Body Fat (%)'] = df['Body Fat (%)'].ewm(span=14, adjust=False).mean()
+
 has_enough_weight_data = len(df) >= 3
 has_enough_comp_data = len(df) >= 5
 
@@ -467,23 +457,25 @@ monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
 if has_enough_weight_data:
-    recent_df_w = df.tail(3)
-    recent_dfs_for_plot['Weight (kg)'] = recent_df_w
-    recent_days_w  = recent_df_w['Date'].map(lambda d: (d - df['Date'].min()).days).values.reshape(-1, 1)
-    future_days_w  = np.array([[(df['Date'].max() - df['Date'].min()).days + i] for i in range(1, 61)])
-    future_dates = [df['Date'].max() + timedelta(days=i) for i in range(1, 61)]
+    # Strictly the last 3 points for Weight
+    recent_df_w = df_smoothed.tail(3)
+    recent_dfs_for_plot['Weight (kg)'] = df.tail(3) # Plot the raw points on graph for transparency
+    recent_days_w  = recent_df_w['Date'].map(lambda d: (d - df_smoothed['Date'].min()).days).values.reshape(-1, 1)
+    future_days_w  = np.array([[(df_smoothed['Date'].max() - df_smoothed['Date'].min()).days + i] for i in range(1, 61)])
+    future_dates = [df_smoothed['Date'].max() + timedelta(days=i) for i in range(1, 61)]
     
     model_w = LinearRegression().fit(recent_days_w, recent_df_w['Weight (kg)'].values)
     monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30
     traj_data['Weight (kg)'] = {'dates': list(recent_df_w['Date']) + future_dates, 'preds': model_w.predict(np.vstack((recent_days_w, future_days_w)))}
 
 if has_enough_comp_data:
-    recent_df_c = df.tail(5)
-    recent_days_c  = recent_df_c['Date'].map(lambda d: (d - df['Date'].min()).days).values.reshape(-1, 1)
-    future_days_c  = np.array([[(df['Date'].max() - df['Date'].min()).days + i] for i in range(1, 61)])
+    # Strictly the last 5 points for Body Composition
+    recent_df_c = df_smoothed.tail(5)
+    recent_days_c  = recent_df_c['Date'].map(lambda d: (d - df_smoothed['Date'].min()).days).values.reshape(-1, 1)
+    future_days_c  = np.array([[(df_smoothed['Date'].max() - df_smoothed['Date'].min()).days + i] for i in range(1, 61)])
     
     for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
-        recent_dfs_for_plot[m] = recent_df_c
+        recent_dfs_for_plot[m] = df.tail(5) # Plot raw
         model_c = LinearRegression().fit(recent_days_c, recent_df_c[m].values)
         monthly_trends[m] = model_c.coef_[0] * 30
         traj_data[m] = {'dates': list(recent_df_c['Date']) + future_dates, 'preds': model_c.predict(np.vstack((recent_days_c, future_days_c)))}
@@ -503,7 +495,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V27 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V28 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -523,7 +515,7 @@ if app_view == "Entry":
         last = pd.Series({'Weight (kg)': 70.0, 'Body Fat (%)': 15.0, 'Muscle Mass (kg)': 35.0})
         prev = last
 
-    # HUD attached flush to selectbox
+    # Removed empty padding margin
     if len(df) > 0:
         recent_bf_avg = df.tail(7)['Body Fat (%)'].mean()
         if "Bulk" in st.session_state['current_goal'] and recent_bf_avg > 18.0:
@@ -760,10 +752,9 @@ elif app_view == "Data":
     header_placeholder.empty()
     st.markdown('<div class="s-head" style="margin-top:0;">RECORD HISTORY</div>', unsafe_allow_html=True)
     
-    # Beautiful HTML Log Cards with secure Undo logic
+    # Clean HTML Cards with "UNDO" feature for recent records
     seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
-    # Iterate backwards through the actual dataframe indexes
     for i in range(len(df)-1, max(-1, len(df)-11), -1):
         row = df.iloc[i]
         c1, c2 = st.columns([5, 1])
@@ -777,10 +768,9 @@ elif app_view == "Data":
             </div>
             """, unsafe_allow_html=True)
         with c2:
-            # Only allow deletion for rows logged in the last 7 days
             if pd.Timestamp(row['Date']) >= seven_days_ago:
                 if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    success = delete_row_from_gsheet(st.session_state['sheet_url'], i)
+                    delete_row_from_gsheet(st.session_state['sheet_url'], i)
                     st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
                     load_data.clear()
                     system_alert("RECORD PURGED", "err")
