@@ -129,20 +129,34 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
     except HttpError:
         return False
 
-def overwrite_gsheet(sheet_url, df):
+def delete_row_from_gsheet(sheet_url, row_index_to_delete):
+    """Deletes a specific row index (0-based relative to data) from the sheet. Assumes row 1 is headers."""
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='A:Z').execute()
-        headers = ['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']
-        values = [headers]
-        for _, row in df.iterrows():
-            date_val = pd.Timestamp(row['Date'])
-            values.append([date_val.strftime('%Y-%m-%d'), date_val.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
-        body = {'values': values}
-        service.spreadsheets().values().update(
-            spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', body=body).execute()
+        # row_index_to_delete is 0-based dataframe index. Google Sheets is 1-based, and row 1 is headers.
+        # So dataframe index 0 = Sheet Row 2.
+        sheet_row_index = row_index_to_delete + 1 
+        
+        # Need sheetId of the first tab (usually 0) to use batchUpdate DeleteDimension
+        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
+
+        requests = [
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": tab_id,
+                        "dimension": "ROWS",
+                        "startIndex": sheet_row_index,
+                        "endIndex": sheet_row_index + 1
+                    }
+                }
+            }
+        ]
+        body = {'requests': requests}
+        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
         return True
     except HttpError:
         return False
@@ -249,22 +263,22 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 
 .c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; }
 
-.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; }
-.chart-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 700; color: var(--text-main); line-height: 1; margin-top: 2px;}
+.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem; }
+.chart-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.chart-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 700; color: var(--text-main); line-height: 1;}
 .chart-unit { font-size: 0.7rem; color: var(--text-subtle); font-weight: 500; }
-.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; padding: 3px 6px; border-radius: 4px; font-weight: 600; display: inline-block; }
+.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 4px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
 
 .hud-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
 .hud-icon { font-size: 1.2rem; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
 .hud-title { font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; }
 .hud-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-top: 2px;}
 
-.tj-row { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: flex-end; }
-.tj-nm { font-size: 0.85rem; color: var(--text-main); font-weight: 600; text-transform: uppercase; }
-.tj-nn { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); }
-.bar-tk { height: 18px; border-radius: 9px; overflow: hidden; margin-bottom: 4px; position: relative; border: 1px solid rgba(255,255,255,0.05);}
-.bar-pin { position: absolute; top: 0; bottom: 0; width: 4px; background: #FFFFFF; box-shadow: 0 0 8px #FFFFFF; z-index: 5; transform: translateX(-50%); border-radius: 2px;}
-.tj-st { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; display: block; margin-top:10px;}
+.tj-row { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: flex-end; }
+.tj-nm { font-size: 0.85rem; color: var(--text-main); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;}
+.bar-tk { height: 22px; border-radius: 11px; overflow: hidden; margin-bottom: 6px; position: relative; border: 1px solid rgba(255,255,255,0.05);}
+.bar-pin { position: absolute; top: 0; bottom: 0; width: 4px; background: #FFFFFF; box-shadow: 0 0 10px #FFFFFF; z-index: 5; transform: translateX(-50%); border-radius: 2px;}
+.tj-st { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-top:10px;}
 
 .tier-item { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); }
 .tier-item.completed { background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); }
@@ -282,21 +296,22 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
-/* Perfect Selectbox Centering */
-div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; min-height: 3.5rem !important; padding: 0 !important; display: flex !important; justify-content: center !important;}
+/* Remove margin below selectbox so Validation HUD sits flush */
+div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
 div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; }
 
-div[data-testid="stForm"] button, .stButton>button {
-    background: var(--text-main) !important; color: var(--bg-primary) !important; 
-    font-family: 'Inter', sans-serif !important; font-weight: 800 !important; font-size: 0.95rem !important; 
-    border: none !important; border-radius: 12px !important; padding: 1rem !important; margin-top: 1.5rem !important;
-    transition: transform 0.1s ease !important; text-transform: uppercase !important; letter-spacing: 1px !important;
-}
+div[data-testid="stTextInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; min-height: 3.5rem !important; overflow: hidden !important; padding: 0 !important;}
+div[data-testid="stTextInput"] input { color: var(--text-main) !important; font-family: 'JetBrains Mono', monospace !important; font-size: 1.2rem !important; text-align: center !important; margin-bottom: 0 !important; border: none !important;}
+div[data-testid="stTextInput"] button { background: transparent !important; border: none !important; box-shadow: none !important; height: 2.5rem !important; width: 2.5rem !important; margin-right: 0.2rem !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+div[data-testid="stTextInput"] button svg { width: 1.3rem !important; height: 1.3rem !important; fill: var(--text-subtle) !important; }
+
+div[data-testid="stForm"] button, .stButton>button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'Inter', sans-serif !important; font-weight: 800 !important; font-size: 0.95rem !important; border: none !important; border-radius: 12px !important; padding: 1rem !important; margin-top: 1.5rem !important; transition: transform 0.1s ease !important; text-transform: uppercase !important; letter-spacing: 1px !important; }
 .stButton>button { border: 2px solid var(--border-strong) !important; background: var(--surface) !important; color: var(--text-main) !important; padding: 2.5rem 1rem !important; font-size: 1.5rem !important; margin-top: 0 !important; }
 div[data-testid="stDateInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; height: 3rem !important; }
-[data-testid="stDataFrame"] { border-radius: 8px; border: 1px solid var(--border); }
-div[data-testid="stForm"] { margin-bottom: 1rem !important; }
+
+button[aria-label="Step down"], button[aria-label="Step up"], button[title="Step down"], button[title="Step up"] { display: none !important; }
 </style>
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
@@ -322,6 +337,33 @@ if not st.session_state['auth_status']:
     else:
         st.error("🔒 Access Denied. Use your personal link to log in.")
         st.stop()
+
+# ══════════════════════════════════════════════════════════════
+# ADMIN PROFILE SELECTION SCREEN
+# ══════════════════════════════════════════════════════════════
+if st.session_state.get('is_admin') and not st.session_state['auth_status']:
+    st.markdown("""
+    <div class="app-bar" style="border:none; justify-content:center; margin-top:3rem;">
+        <div style="text-align:center;">
+            <div class="wordmark">METRICS</div>
+            <div class="tagline">Admin Control</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div class='s-head' style='text-align:center; margin-bottom: 2rem;'>SELECT PROFILE</div>", unsafe_allow_html=True)
+    cols = st.columns(len(USER_DATA))
+    for i, (user_key, url) in enumerate(USER_DATA.items()):
+        display_name = get_display_name(user_key)
+        with cols[i]:
+            if st.button(display_name.upper(), key=f"admin_{user_key}", use_container_width=True):
+                st.session_state['auth_status'] = True
+                st.session_state['current_user'] = user_key
+                st.session_state['sheet_url'] = url
+                st.session_state['is_admin'] = True
+                st.query_params.user = user_key
+                st.rerun()
+    st.stop()
 
 # ══════════════════════════════════════════════════════════════
 # MATH ENGINE & GLOBAL HELPERS
@@ -368,19 +410,30 @@ def traj_bar(label, actual, metric, profile, unit):
     s = sgn(actual); ts = sgn(tgt)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile)
     
-    # DYNAMIC SCALING FIX: max_bound will dynamically expand so 'actual' never overflows the bar.
     if metric == 'Muscle Mass (kg)':
-        max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.25
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:4px;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt:.1f}</span><span>MAX ∞</span></div>"
+        max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt:.1f}</span><span>MAX ∞</span></div>"
     else:
-        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), abs(actual), 0.1) * 1.25
-        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:4px;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt:.1f}</span><span>MAX {profile[metric][2]:.1f}</span></div>"
+        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), abs(actual), 0.1) * 1.3
+        bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt:.1f}</span><span>MAX {profile[metric][2]:.1f}</span></div>"
         
     pct = min((abs(actual) / max_bound) * 100, 100)
     pct = max(pct, 2)
     bg_grad = get_gradient(metric, profile, max_bound)
 
-    return f"<div class='tj-blk' style='margin-bottom: 2rem;'><div class='tj-row'><span class='tj-nm'>{label}</span><span class='tj-nn'>ACTUAL {s}{actual:.2f} | TGT {ts}{tgt:.2f} {unit}</span></div><div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>{bounds_html}<div class='tj-st {c_txt}'>{status}</div></div>"
+    return f"""
+    <div class='tj-blk' style='margin-bottom: 2rem;'>
+        <div class='tj-row'>
+            <span class='tj-nm'>{label}</span>
+            <div style='text-align:right;'>
+                <div style='font-family:"JetBrains Mono", monospace; font-size:1.1rem; font-weight:800; color:var(--text-main); line-height:1;'>{s}{actual:.2f} <span style='font-size:0.7rem; color:var(--text-muted);'>{unit}</span></div>
+                <div style='font-family:"JetBrains Mono", monospace; font-size:0.65rem; color:var(--text-subtle); font-weight:700;'>TARGET {ts}{tgt:.2f}</div>
+            </div>
+        </div>
+        <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
+        {bounds_html}
+        <div class='tj-st {c_txt}'>{status}</div>
+    </div>"""
 
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING
@@ -406,21 +459,16 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
+# EXACT Model Constraints
 has_enough_weight_data = len(df) >= 3
 has_enough_comp_data = len(df) >= 5
 
-# Create specific tracking datasets so Trends match Linear Regression points EXACTLY
 monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
 if has_enough_weight_data:
-    cutoff = df['Date'].max() - timedelta(days=45)
-    
-    # Weight requires minimum 3 points
-    recent_df_w = df[df['Date'] >= cutoff]
-    if len(recent_df_w) < 3: recent_df_w = df.tail(3)
+    recent_df_w = df.tail(3)
     recent_dfs_for_plot['Weight (kg)'] = recent_df_w
-    
     recent_days_w  = recent_df_w['Date'].map(lambda d: (d - df['Date'].min()).days).values.reshape(-1, 1)
     future_days_w  = np.array([[(df['Date'].max() - df['Date'].min()).days + i] for i in range(1, 61)])
     future_dates = [df['Date'].max() + timedelta(days=i) for i in range(1, 61)]
@@ -430,10 +478,7 @@ if has_enough_weight_data:
     traj_data['Weight (kg)'] = {'dates': list(recent_df_w['Date']) + future_dates, 'preds': model_w.predict(np.vstack((recent_days_w, future_days_w)))}
 
 if has_enough_comp_data:
-    # Comp requires minimum 5 points
-    recent_df_c = df[df['Date'] >= cutoff]
-    if len(recent_df_c) < 5: recent_df_c = df.tail(5)
-    
+    recent_df_c = df.tail(5)
     recent_days_c  = recent_df_c['Date'].map(lambda d: (d - df['Date'].min()).days).values.reshape(-1, 1)
     future_days_c  = np.array([[(df['Date'].max() - df['Date'].min()).days + i] for i in range(1, 61)])
     
@@ -458,7 +503,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V26 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V27 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -478,14 +523,15 @@ if app_view == "Entry":
         last = pd.Series({'Weight (kg)': 70.0, 'Body Fat (%)': 15.0, 'Muscle Mass (kg)': 35.0})
         prev = last
 
+    # HUD attached flush to selectbox
     if len(df) > 0:
         recent_bf_avg = df.tail(7)['Body Fat (%)'].mean()
         if "Bulk" in st.session_state['current_goal'] and recent_bf_avg > 18.0:
-            st.markdown(f"<div style='margin-top:-10px; margin-bottom:15px; font-size:0.7rem; color:var(--c-rose); font-weight:600;'><span>⚠️</span> WARNING: HIGH FAT FOR BULK ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ HIGH FAT FOR BULK ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
-            st.markdown(f"<div style='margin-top:-10px; margin-bottom:15px; font-size:0.7rem; color:var(--c-rose); font-weight:600;'><span>⚠️</span> WARNING: TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='margin-top:-10px; margin-bottom:15px; font-size:0.7rem; color:var(--c-emerald); font-weight:600;'><span>✓</span> VALID FOR CURRENT BODY COMPOSITION ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
 
     delta_w = last['Weight (kg)'] - prev['Weight (kg)']
     delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
@@ -535,7 +581,7 @@ if app_view == "Entry":
 elif app_view == "Trends":
     header_placeholder.empty()
     if not has_enough_weight_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
@@ -552,13 +598,10 @@ elif app_view == "Trends":
         st.markdown(f"""
         <div class="chart-blk">
             <div class="chart-meta">
+                <div style="font-size:0.7rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f}{unit}</span></div>
                 <div>
-                    <div style="font-size:0.65rem; color:var(--text-muted); font-weight:600;">{METRIC_SHORT[metric]}</div>
-                    <div class="chart-val">{last_val:.1f}<span class="chart-unit"> {unit}</span></div>
-                </div>
-                <div style="text-align: right;">
-                    <span class="t-chip {c_bg} {c_txt}">ACTUAL: {sgn(trend)}{trend:.2f}</span><br>
-                    <span class="t-chip" style="background:rgba(150,150,150,0.15); margin-top:4px;">TARGET: {sgn(target)}{target:.2f}</span>
+                    <span class="t-chip {c_bg} {c_txt}">ACT {sgn(trend)}{trend:.2f}</span>
+                    <span class="t-chip" style="background:rgba(150,150,150,0.15); margin-left:4px;">TGT {sgn(target)}{target:.2f}</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -566,7 +609,7 @@ elif app_view == "Trends":
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df['Date'], y=df[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), hoverinfo='skip'))
         
-        # EXACT Data points used for regression
+        # EXACT Data points used for regression (Blue dots)
         spec_recent = recent_dfs_for_plot[metric]
         fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Recent', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
@@ -579,7 +622,7 @@ elif app_view == "Trends":
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, t=0, b=5), height=130, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d'),
             yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
@@ -589,7 +632,7 @@ elif app_view == "Trends":
 elif app_view == "Analysis":
     header_placeholder.empty()
     if not has_enough_weight_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     last = df.iloc[-1]
@@ -717,38 +760,31 @@ elif app_view == "Data":
     header_placeholder.empty()
     st.markdown('<div class="s-head" style="margin-top:0;">RECORD HISTORY</div>', unsafe_allow_html=True)
     
-    # Beautiful HTML Log Cards
-    html_cards = ""
-    for i, row in df.iloc[::-1].head(10).iterrows():
-        html_cards += f"""
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--text-muted);">{row['Date'].strftime('%d %b %Y')}</div>
-            <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; color:var(--text-main); font-weight:700;">
-                {row['Weight (kg)']}KG <span style="color:var(--border-strong);">|</span> {row['Muscle Mass (kg)']}MM <span style="color:var(--border-strong);">|</span> {row['Body Fat (%)']}%
-            </div>
-        </div>
-        """
-    st.markdown(html_cards, unsafe_allow_html=True)
+    # Beautiful HTML Log Cards with secure Undo logic
+    seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
-    with st.expander("MANUAL DATABANK OVERRIDE"):
-        display_df = df.copy()
-        display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d')
-        edited_df = st.data_editor(
-            display_df, num_rows="dynamic", use_container_width=True, hide_index=True,
-            column_config={
-                "Date": st.column_config.TextColumn("Date", disabled=False),
-                "Weight (kg)": st.column_config.NumberColumn("Weight", format="%.1f"),
-                "Muscle Mass (kg)": st.column_config.NumberColumn("Muscle", format="%.1f"),
-                "Body Fat (%)": st.column_config.NumberColumn("Fat %", format="%.1f")
-            }
-        )
-        if st.button("OVERRIDE DATABANK", use_container_width=True):
-            edited_df['Date'] = pd.to_datetime(edited_df['Date'])
-            overwrite_gsheet(st.session_state['sheet_url'], edited_df)
-            st.session_state['active_df'] = edited_df
-            load_data.clear()
-            system_alert("DATABANK OVERRIDE ACCEPTED")
-            st.rerun()
+    # Iterate backwards through the actual dataframe indexes
+    for i in range(len(df)-1, max(-1, len(df)-11), -1):
+        row = df.iloc[i]
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            st.markdown(f"""
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--text-muted);">{row['Date'].strftime('%d %b %Y')}</div>
+                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; color:var(--text-main); font-weight:700;">
+                    {row['Weight (kg)']}KG <span style="color:var(--border-strong); margin: 0 4px;">|</span> {row['Muscle Mass (kg)']}MM <span style="color:var(--border-strong); margin: 0 4px;">|</span> {row['Body Fat (%)']}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c2:
+            # Only allow deletion for rows logged in the last 7 days
+            if pd.Timestamp(row['Date']) >= seven_days_ago:
+                if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
+                    success = delete_row_from_gsheet(st.session_state['sheet_url'], i)
+                    st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
+                    load_data.clear()
+                    system_alert("RECORD PURGED", "err")
+                    st.rerun()
 
 elif app_view == "Settings":
     header_placeholder.empty()
