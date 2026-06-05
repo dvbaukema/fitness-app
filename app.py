@@ -23,20 +23,14 @@ st.set_page_config(
 def system_alert(message, kind="ok"):
     bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
     ph = st.empty()
-    ph.markdown(f"""
-    <div style="position:fixed; top:30px; left:50%; transform:translateX(-50%);
-                background:{bg}; color:#09090B; padding:15px 40px;
-                border-radius:30px; font-weight:800; font-family:'Inter', sans-serif;
-                z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); 
-                text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;">
-        {message}
-    </div>
-    """, unsafe_allow_html=True)
+    # Flattened to prevent Streamlit from rendering as a code block
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:#09090B; padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
+    ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
 
 # ══════════════════════════════════════════════════════════════
-# HARDCODED PROTOCOL TARGETS
+# HARDCODED PROTOCOL TARGETS (EDIT THESE PERMANENTLY HERE)
 # ══════════════════════════════════════════════════════════════
 DEFAULT_PROFILES = {
     "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
@@ -254,7 +248,7 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 
 .chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem; }
 .chart-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0px; }
-.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 3px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
+.t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 4px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
 
 .hud-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
 .hud-icon { font-size: 1.2rem; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
@@ -278,6 +272,10 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 .tier-req { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); }
 .prog-tk { height: 6px; background: rgba(0,0,0,0.2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
 .prog-fill { height: 100%; background: var(--c-emerald); border-radius: 3px; }
+
+div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
+div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
+div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
 /* Selector Controls (Centering Fix) */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
@@ -363,14 +361,11 @@ def eval_metric(metric, actual, profile, mmt=None, bft=None):
     # ── SMART BODY RECOMPOSITION OVERRIDES ──
     if metric == 'Weight (kg)':
         if mmt is not None and bft is not None:
-            # 1. Hyper-Anabolic: Over weight limit, but driven highly by muscle mass
             if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2:
                 return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
-            # 2. Hyper-Lipolytic: Under weight limit, but muscle preserved and fat dropping
             if actual < lower and mmt >= -0.2 and bft < lower:
                 return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
 
-    # Standard Bounds
     if metric == 'Muscle Mass (kg)':
         if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
         if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
@@ -398,58 +393,44 @@ def get_gradient(metric, profile, max_mag, is_smart_override=False):
         return f"linear-gradient(to right, {c_o} 0%, {c_o} {p_lower}%, {c_g} {p_lower}%, {c_g} {p_upper}%, {c_r} {p_upper}%, {c_r} 100%)"
 
 def hud_card(kind, icon, title, desc):
-    return f"""<div class="hud-card" style="border-left: 3px solid var(--{kind});"><div class="hud-icon {kind}">{icon}</div><div><div class="hud-title {kind}">{title}</div><div class="hud-desc">{desc}</div></div></div>"""
+    # Flatten HTML to avoid markdown code-block issues
+    return f"<div class='hud-card' style='border-left: 3px solid var(--{kind});'><div class='hud-icon {kind}'>{icon}</div><div><div class='hud-title {kind}'>{title}</div><div class='hud-desc'>{desc}</div></div></div>"
 
-def traj_bar(label, actual, metric, profile, unit, mmt=None, bft=None):
-    tgt = profile[metric][0]
-    s = sgn(actual); ts = sgn(tgt)
-    c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile, mmt, bft)
+def traj_bar(label, actual_rate, metric, profile, unit, current_val, days_to_end, mmt=None, bft=None):
+    tgt_rate = profile[metric][0]
+    s = sgn(actual_rate); ts = sgn(tgt_rate)
+    c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
     
     is_smart_override = False
     if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
     if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
 
-    # Perfect Absolute Positioning for Markers
+    # End goal projection calculation
+    proj_val = current_val + (actual_rate * (max(0, days_to_end) / 30.0))
+    proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.65rem; color:var(--c-blue); font-weight:700; margin-top: 4px;'>SEP 1 PROJ: {proj_val:.1f}</div>"
+
     if metric == 'Muscle Mass (kg)':
-        max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
+        max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
         p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        p_t = max(min(((tgt + max_bound) / (2 * max_bound)) * 100, 100), 0)
+        p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
         
-        bounds_html = f"""
-        <div style='position:relative; height:18px; font-family:"JetBrains Mono", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'>
-            <span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span>
-            <span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt:.2f}</span>
-            <span style='position:absolute; right:0;'>MAX ∞</span>
-        </div>"""
+        bounds_html = f"<div style='position:relative; height:18px; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span><span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='position:absolute; right:0;'>MAX ∞</span></div>"
     else:
-        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), abs(actual), 0.1) * 1.3
+        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
         p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
         p_u = max(min(((profile[metric][2] + max_bound) / (2 * max_bound)) * 100, 100), 0)
-        p_t = max(min(((tgt + max_bound) / (2 * max_bound)) * 100, 100), 0)
+        p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
         
-        bounds_html = f"""
-        <div style='position:relative; height:18px; font-family:"JetBrains Mono", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'>
-            <span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span>
-            <span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt:.2f}</span>
-            <span style='position:absolute; left:{p_u}%; transform:translateX(-50%);'>MAX {profile[metric][2]:.2f}</span>
-        </div>"""
+        bounds_html = f"<div style='position:relative; height:18px; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='position:absolute; left:{p_l}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.2f}</span><span style='position:absolute; left:{p_t}%; transform:translateX(-50%); color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='position:absolute; left:{p_u}%; transform:translateX(-50%);'>MAX {profile[metric][2]:.2f}</span></div>"
         
-    pct = ((actual + max_bound) / (2 * max_bound)) * 100
+    pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
     pct = max(min(pct, 98), 2)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    return f"""
-    <div class='tj-blk' style='margin-bottom: 2.5rem;'>
-        <div class='tj-row' style='margin-bottom:8px;'>
-            <span class='tj-nm'>{label}</span>
-            <div style='text-align:right;'>
-                <div style='font-family:"JetBrains Mono", monospace; font-size:1.1rem; font-weight:800; color:var(--text-main); line-height:1;'>{s}{actual:.2f} <span style='font-size:0.7rem; color:var(--text-muted);'>{unit}</span></div>
-            </div>
-        </div>
-        <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
-        {bounds_html}
-        <div class='tj-st {c_txt}'>{status}</div>
-    </div>"""
+    # Flattened HTML to prevent Streamlit rendering as Code Block
+    html_block = f"<div class='tj-blk' style='margin-bottom: 2.5rem;'><div class='tj-row' style='margin-bottom:8px;'><span class='tj-nm'>{label}</span><div style='text-align:right;'><div style='font-family:\"JetBrains Mono\", monospace; font-size:1.1rem; font-weight:800; color:var(--text-main); line-height:1;'>{s}{actual_rate:.2f} <span style='font-size:0.7rem; color:var(--text-muted);'>{unit}</span></div>{proj_html}</div></div><div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>{bounds_html}<div class='tj-st {c_txt}'>{status}</div></div>"
+    return html_block
+
 
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING
@@ -494,50 +475,47 @@ if has_enough_weight_data:
     X_w = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values.reshape(-1, 1)
     y_w = df_w['Weight (kg)'].values
     model_w = LinearRegression().fit(X_w, y_w)
+    
     monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30  # kg/mo
     
-    # Weight Trajectory Line bounds
-    start_day_w = (df_w['Date'].min() - df_w['Date'].min()).days
-    days_to_end_w = (target_end_date.date() - df_w['Date'].min().date()).days
-    if days_to_end_w > 0:
-        future_days_w  = np.array([[start_day_w + i] for i in range(0, days_to_end_w + 10)])
-        future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
-        traj_data['Weight (kg)'] = {'dates': future_dates_w, 'preds': model_w.predict(future_days_w)}
+    start_day = (df_w['Date'].min() - df_w['Date'].min()).days
+    future_days_w  = np.array([[start_day + i] for i in range(1, 150)])
+    future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(1, 150)]
+    traj_data['Weight (kg)'] = {'dates': future_dates_w, 'preds': model_w.predict(future_days_w)}
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5)
     X_c = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values.reshape(-1, 1)
+    start_day_c = (df_c['Date'].min() - df_c['Date'].min()).days
+    future_days_c  = np.array([[start_day_c + i] for i in range(1, 150)])
+    future_dates_c = [df_c['Date'].min() + timedelta(days=i) for i in range(1, 150)]
     
-    days_to_end_c = (target_end_date.date() - df_c['Date'].min().date()).days
-    if days_to_end_c > 0:
-        start_day_c = (df_c['Date'].min() - df_c['Date'].min()).days
-        future_days_c  = np.array([[start_day_c + i] for i in range(0, days_to_end_c + 10)])
-        future_dates_c = [df_c['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_c + 10)]
-        
-        for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
-            recent_dfs_for_plot[m] = df_c
-            y_c = df_c[m].values
-            model_c = LinearRegression().fit(X_c, y_c)
-            monthly_trends[m] = model_c.coef_[0] * 30 # per month
-            traj_data[m] = {'dates': future_dates_c, 'preds': model_c.predict(future_days_c)}
+    for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
+        recent_dfs_for_plot[m] = df_c
+        y_c = df_c[m].values
+        model_c = LinearRegression().fit(X_c, y_c)
+        monthly_trends[m] = model_c.coef_[0] * 30 # per month
+        traj_data[m] = {'dates': future_dates_c, 'preds': model_c.predict(future_days_c)}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
-if "goal" in st.query_params: st.session_state['current_goal'] = st.query_params.get("goal")
+if "goal" in st.query_params:
+    st.session_state['current_goal'] = st.query_params.get("goal")
 
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES.get(active_goal, GOAL_PROFILES['Lean Bulk'])
 
 header_placeholder = st.empty()
-app_view = st.segmented_control("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"], default="Entry", label_visibility="collapsed")
+app_view = st.segmented_control("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"],
+                                default="Entry", label_visibility="collapsed")
 
 if app_view == "Entry":
     header_placeholder.markdown(f"""
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V34 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V35 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -626,7 +604,8 @@ elif app_view == "Trends":
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
-        if metric != 'Weight (kg)' and not has_enough_comp_data: continue
+        if metric != 'Weight (kg)' and not has_enough_comp_data:
+            continue
             
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
@@ -646,11 +625,11 @@ elif app_view == "Trends":
         
         fig = go.Figure()
         
-        # Historical Data (Faded Grey)
+        # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
         fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
         
-        # Active Data (Solid Blue)
+        # Active Data (After Start Epoch) - Solid Blue
         spec_recent = recent_dfs_for_plot[metric]
         fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
@@ -746,11 +725,13 @@ elif app_view == "Analysis":
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo", mmt, bft), unsafe_allow_html=True)
+    days_to_target = (target_end_date.date() - datetime.now().date()).days
+
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo", w, days_to_target, mmt, bft), unsafe_allow_html=True)
     if has_enough_comp_data:
         st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", mmt, bft),
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mm, days_to_target, mmt, bft) +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", bf, days_to_target, mmt, bft),
             unsafe_allow_html=True
         )
 
@@ -784,22 +765,10 @@ elif app_view == "Analysis":
             
     if not diags:
         diags.append(hud_card("c-ok", "✓", "LOCKED IN", "All tracked parameters are within optimal bounds. Stay the course."))
+    
+    # Render diagnostics avoiding markdown indentation bugs
     for d in diags:
         st.markdown(d, unsafe_allow_html=True)
-
-    with st.expander("ℹ️ Active Protocol Parameters"):
-        w_t, w_min, w_max = ideal_rates['Weight (kg)']
-        m_t, m_min = ideal_rates['Muscle Mass (kg)'][:2]
-        bf_t, bf_min, bf_max = ideal_rates['Body Fat (%)']
-        
-        st.markdown(f"""
-        <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.6; font-family: 'JetBrains Mono', monospace;">
-        <b>WEIGHT:</b> Target {w_t:+.2f} kg/mo | Range: [{w_min:+.2f}, {w_max:+.2f}]<br>
-        <b>MUSCLE:</b> Target {m_t:+.2f} kg/mo | Minimum: {m_min:+.2f}<br>
-        <b>FAT:</b> Target {bf_t:+.2f} %/mo | Range: [{bf_min:+.2f}, {bf_max:+.2f}]<br>
-        <br><span style="font-family:'Inter', sans-serif;"><i>Note: Base parameters are hardcoded in the Python core. Change protocol using the main dropdown.</i></span>
-        </div>
-        """, unsafe_allow_html=True)
 
     if st.session_state.get('enable_achievements', True):
         start_gym_time = st.session_state['gym_start_date']
