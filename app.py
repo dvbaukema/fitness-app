@@ -248,7 +248,6 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 .c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; }
 
 .chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem; }
-.chart-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
 .chart-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 700; color: var(--text-main); line-height: 1;}
 .chart-unit { font-size: 0.7rem; color: var(--text-subtle); font-weight: 500; }
 .t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 4px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
@@ -280,6 +279,7 @@ div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
+/* Remove margin below selectbox so Validation HUD sits flush */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -393,7 +393,6 @@ def traj_bar(label, actual, metric, profile, unit):
     s = sgn(actual); ts = sgn(tgt)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile)
     
-    # ── EMA SMOOTHING & DYNAMIC TRACK SCALING ──
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
         bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.1f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt:.1f}</span><span>MAX ∞</span></div>"
@@ -420,7 +419,7 @@ def traj_bar(label, actual, metric, profile, unit):
     </div>"""
 
 # ══════════════════════════════════════════════════════════════
-# DATA PROCESSING & EXPONENTIAL MOVING AVERAGE (EMA) ENGINE
+# DATA LOADING
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url):
@@ -444,41 +443,36 @@ METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS',
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
 # ── MATHEMATICAL ENGINE UPGRADE (EMA FILTERING) ──
-# To prevent wild trendline swinging, apply EMA before regression.
 df_smoothed = df.copy()
-df_smoothed['Weight (kg)'] = df['Weight (kg)'].ewm(span=7, adjust=False).mean()
-df_smoothed['Muscle Mass (kg)'] = df['Muscle Mass (kg)'].ewm(span=14, adjust=False).mean()
-df_smoothed['Body Fat (%)'] = df['Body Fat (%)'].ewm(span=14, adjust=False).mean()
-
-has_enough_weight_data = len(df) >= 3
-has_enough_comp_data = len(df) >= 5
+# Custom EMA alphas per metric to match required mathematical constraints
+if len(df) > 0:
+    df_smoothed['Weight (kg)'] = df['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
+    df_smoothed['Muscle Mass (kg)'] = df['Muscle Mass (kg)'].ewm(alpha=0.05, adjust=False).mean()
+    df_smoothed['Body Fat (%)'] = df['Body Fat (%)'].ewm(alpha=0.03, adjust=False).mean()
 
 monthly_trends, traj_data = {}, {}
-recent_dfs_for_plot = {}
 
-if has_enough_weight_data:
-    # Strictly the last 3 points for Weight
-    recent_df_w = df_smoothed.tail(3)
-    recent_dfs_for_plot['Weight (kg)'] = df.tail(3) # Plot the raw points on graph for transparency
-    recent_days_w  = recent_df_w['Date'].map(lambda d: (d - df_smoothed['Date'].min()).days).values.reshape(-1, 1)
-    future_days_w  = np.array([[(df_smoothed['Date'].max() - df_smoothed['Date'].min()).days + i] for i in range(1, 61)])
-    future_dates = [df_smoothed['Date'].max() + timedelta(days=i) for i in range(1, 61)]
+# 60 Day Rolling Window for Regression
+cutoff = df['Date'].max() - timedelta(days=60)
+df_window = df_smoothed[df_smoothed['Date'] >= cutoff]
+
+if len(df_window) >= 3:
+    recent_days_w  = df_window['Date'].map(lambda d: (d - df_window['Date'].min()).days).values.reshape(-1, 1)
+    future_days_w  = np.array([[(df_window['Date'].max() - df_window['Date'].min()).days + i] for i in range(1, 61)])
+    future_dates = [df_window['Date'].max() + timedelta(days=i) for i in range(1, 61)]
     
-    model_w = LinearRegression().fit(recent_days_w, recent_df_w['Weight (kg)'].values)
+    model_w = LinearRegression().fit(recent_days_w, df_window['Weight (kg)'].values)
     monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30
-    traj_data['Weight (kg)'] = {'dates': list(recent_df_w['Date']) + future_dates, 'preds': model_w.predict(np.vstack((recent_days_w, future_days_w)))}
+    traj_data['Weight (kg)'] = {'dates': list(df_window['Date']) + future_dates, 'preds': model_w.predict(np.vstack((recent_days_w, future_days_w)))}
 
-if has_enough_comp_data:
-    # Strictly the last 5 points for Body Composition
-    recent_df_c = df_smoothed.tail(5)
-    recent_days_c  = recent_df_c['Date'].map(lambda d: (d - df_smoothed['Date'].min()).days).values.reshape(-1, 1)
-    future_days_c  = np.array([[(df_smoothed['Date'].max() - df_smoothed['Date'].min()).days + i] for i in range(1, 61)])
+if len(df_window) >= 5:
+    recent_days_c  = df_window['Date'].map(lambda d: (d - df_window['Date'].min()).days).values.reshape(-1, 1)
+    future_days_c  = np.array([[(df_window['Date'].max() - df_window['Date'].min()).days + i] for i in range(1, 61)])
     
     for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
-        recent_dfs_for_plot[m] = df.tail(5) # Plot raw
-        model_c = LinearRegression().fit(recent_days_c, recent_df_c[m].values)
+        model_c = LinearRegression().fit(recent_days_c, df_window[m].values)
         monthly_trends[m] = model_c.coef_[0] * 30
-        traj_data[m] = {'dates': list(recent_df_c['Date']) + future_dates, 'preds': model_c.predict(np.vstack((recent_days_c, future_days_c)))}
+        traj_data[m] = {'dates': list(df_window['Date']) + future_dates, 'preds': model_c.predict(np.vstack((recent_days_c, future_days_c)))}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -515,7 +509,6 @@ if app_view == "Entry":
         last = pd.Series({'Weight (kg)': 70.0, 'Body Fat (%)': 15.0, 'Muscle Mass (kg)': 35.0})
         prev = last
 
-    # Removed empty padding margin
     if len(df) > 0:
         recent_bf_avg = df.tail(7)['Body Fat (%)'].mean()
         if "Bulk" in st.session_state['current_goal'] and recent_bf_avg > 18.0:
@@ -572,13 +565,13 @@ if app_view == "Entry":
 
 elif app_view == "Trends":
     header_placeholder.empty()
-    if not has_enough_weight_data:
+    if len(df) < 3:
         st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
-        if metric != 'Weight (kg)' and not has_enough_comp_data:
+        if metric != 'Weight (kg)' and len(df) < 5:
             continue
             
         last_val = df.iloc[-1][metric]
@@ -599,17 +592,21 @@ elif app_view == "Trends":
         """, unsafe_allow_html=True)
         
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df['Date'], y=df[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), hoverinfo='skip'))
         
-        # EXACT Data points used for regression (Blue dots)
-        spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Recent', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
-        fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+        # Plot Raw History
+        fig.add_trace(go.Scatter(x=df['Date'], y=df[metric], mode='lines', name='Raw Data', line=dict(color='rgba(150,150,150,0.2)', width=1), hoverinfo='skip'))
         
+        # Plot EMA Filtered Line (What the regression actually sees)
+        fig.add_trace(go.Scatter(x=df_window['Date'], y=df_window[metric], mode='lines', name='Filtered Trend', line=dict(color='#3B82F6', width=2.5), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        
+        # Plot Trajectory (Regression output)
+        fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory Path', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+        
+        # Plot Ideal Target
         last_raw = df.iloc[-1][metric]
         daily_rate = ideal_rates[metric][0] / 30.0
         ideal_vals = [last_raw] + [last_raw + daily_rate * x for x in range(1, 61)]
-        fig.add_trace(go.Scatter(x=[df['Date'].max()] + future_dates, y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[df['Date'].max()] + future_dates, y=ideal_vals, mode='lines', name='Target Goal', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -623,7 +620,7 @@ elif app_view == "Trends":
 
 elif app_view == "Analysis":
     header_placeholder.empty()
-    if not has_enough_weight_data:
+    if len(df) < 3:
         st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
@@ -632,7 +629,7 @@ elif app_view == "Analysis":
     wt = monthly_trends.get('Weight (kg)', 0)
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates)
 
-    if has_enough_comp_data:
+    if len(df) >= 5:
         bft, mmt = monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
         c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
         c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
@@ -665,7 +662,7 @@ elif app_view == "Analysis":
     """, unsafe_allow_html=True)
 
     st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo"), unsafe_allow_html=True)
-    if has_enough_comp_data:
+    if len(df) >= 5:
         st.markdown(
             traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
             traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
@@ -684,7 +681,7 @@ elif app_view == "Analysis":
         else:
             diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
     
-    if has_enough_comp_data:
+    if len(df) >= 5:
         m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
         bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
         if wt >= w_lower and mmt < m_lower:
@@ -752,10 +749,9 @@ elif app_view == "Data":
     header_placeholder.empty()
     st.markdown('<div class="s-head" style="margin-top:0;">RECORD HISTORY</div>', unsafe_allow_html=True)
     
-    # Clean HTML Cards with "UNDO" feature for recent records
     seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
-    for i in range(len(df)-1, max(-1, len(df)-11), -1):
+    for i in range(len(df)-1, max(-1, len(df)-16), -1):
         row = df.iloc[i]
         c1, c2 = st.columns([5, 1])
         with c1:
@@ -825,7 +821,6 @@ elif app_view == "Settings":
             system_alert("SYSTEM CONFIGURATION SAVED")
             st.rerun()
 
-    # ── ADMIN CONTROL (only for admin) ──
     if st.session_state.get('is_admin'):
         st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
         if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
