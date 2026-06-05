@@ -20,6 +20,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+def system_alert(message, kind="ok"):
+    bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
+    ph = st.empty()
+    ph.markdown(f"""
+    <div style="position:fixed; top:30px; left:50%; transform:translateX(-50%);
+                background:{bg}; color:#09090B; padding:15px 40px;
+                border-radius:30px; font-weight:800; font-family:'Inter', sans-serif;
+                z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); 
+                text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;">
+        {message}
+    </div>
+    """, unsafe_allow_html=True)
+    time.sleep(1.2)
+    ph.empty()
+
 # ══════════════════════════════════════════════════════════════
 # AUTO‑LOGIN FROM HOME SCREEN (localStorage)
 # ══════════════════════════════════════════════════════════════
@@ -174,11 +189,11 @@ if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] 
 
 if 'goal_profiles' not in st.session_state:
     st.session_state['goal_profiles'] = {
-        "Aggressive Cut":  {'Weight (kg)': [-0.75, -1.0, -0.5], 'Muscle Mass (kg)': [-0.05, -0.15], 'Body Fat (%)': [-0.3, -0.5, -0.15]},
-        "Lean Cut":        {'Weight (kg)': [-0.35, -0.5, -0.25], 'Muscle Mass (kg)': [0.0, -0.05],  'Body Fat (%)': [-0.15, -0.25, -0.1]},
-        "Recomposition":   {'Weight (kg)': [0.0, -0.15, 0.15],   'Muscle Mass (kg)': [0.08, 0.02],   'Body Fat (%)': [-0.1, -0.2, -0.05]},
-        "Lean Bulk":       {'Weight (kg)': [0.25, 0.15, 0.35],   'Muscle Mass (kg)': [0.15, 0.08],   'Body Fat (%)': [0.02, -0.05, 0.1]},
-        "Aggressive Bulk": {'Weight (kg)': [0.6, 0.5, 0.8],      'Muscle Mass (kg)': [0.2, 0.12],    'Body Fat (%)': [0.15, 0.08, 0.25]},
+        "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
+        "Lean Cut":        {'Weight (kg)': [-1.5, -2.0, -1.0], 'Muscle Mass (kg)': [0.0, -0.1],  'Body Fat (%)': [-0.6, -1.0, -0.3]},
+        "Recomposition":   {'Weight (kg)': [0.0, -0.5, 0.5],   'Muscle Mass (kg)': [0.3, 0.1],   'Body Fat (%)': [-0.4, -0.8, -0.1]},
+        "Lean Bulk":       {'Weight (kg)': [1.0, 0.5, 1.5],    'Muscle Mass (kg)': [0.6, 0.3],   'Body Fat (%)': [0.1, -0.1, 0.4]},
+        "Aggressive Bulk": {'Weight (kg)': [2.5, 2.0, 3.5],    'Muscle Mass (kg)': [0.8, 0.5],   'Body Fat (%)': [0.6, 0.3, 1.0]},
     }
 
 # ══════════════════════════════════════════════════════════════
@@ -432,7 +447,7 @@ cutoff = df['Date'].max() - timedelta(days=60)
 df_window = df[df['Date'] >= cutoff].copy()
 df_history = df[df['Date'] < cutoff].copy()
 
-weekly_trends, traj_data = {}, {}
+monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
 if len(df_window) >= 3:
@@ -441,7 +456,7 @@ if len(df_window) >= 3:
     y_w = df_window['Weight_EMA'].values
     model_w = LinearRegression().fit(X_w, y_w)
     
-    weekly_trends['Weight (kg)'] = model_w.coef_[0] * 7  # kg/week
+    monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30  # kg/mo
     
     future_days_w  = np.array([[(df_window['Date'].max() - df_window['Date'].min()).days + i] for i in range(1, 31)])
     future_dates_w = [df_window['Date'].max() + timedelta(days=i) for i in range(1, 31)]
@@ -458,7 +473,7 @@ if len(df_window) >= 5:
     for m, ema_col in [('Muscle Mass (kg)', 'Muscle_EMA'), ('Body Fat (%)', 'BodyFat_EMA')]:
         y_c = df_window[ema_col].values
         model_c = LinearRegression().fit(X_c, y_c)
-        weekly_trends[m] = model_c.coef_[0] * 7 # per week
+        monthly_trends[m] = model_c.coef_[0] * 30 # per month
         traj_data[m] = {'dates': list(df_window['Date']) + future_dates_c, 'preds': model_c.predict(np.vstack((X_c, future_days_c)))}
 
 # ══════════════════════════════════════════════════════════════
@@ -547,8 +562,7 @@ if app_view == "Entry":
             load_data.clear()
             if st.session_state['enable_quotes']:
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
-            st.success("✅ RECORD SECURED IN DATABANK")
-            time.sleep(1)
+            system_alert("DATABANK UPDATED")
             st.rerun()
 
 elif app_view == "Trends":
@@ -564,7 +578,7 @@ elif app_view == "Trends":
             
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
-        trend = weekly_trends[metric]
+        trend = monthly_trends[metric]
         target = ideal_rates[metric][0]
         c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
         
@@ -573,8 +587,8 @@ elif app_view == "Trends":
             <div class="chart-meta">
                 <div style="font-size:0.75rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f} <span style="font-size:0.6rem; color:var(--text-muted);">{unit}</span></span></div>
                 <div>
-                    <span class="t-chip {c_bg} {c_txt}">ACT {sgn(trend)}{trend:.2f} /wk</span>
-                    <span class="t-chip bg-neu c-neu" style="margin-left:4px;">TGT {sgn(target)}{target:.2f} /wk</span>
+                    <span class="t-chip {c_bg} {c_txt}">ACT {sgn(trend)}{trend:.2f} /mo</span>
+                    <span class="t-chip bg-neu c-neu" style="margin-left:4px;">TGT {sgn(target)}{target:.2f} /mo</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -596,7 +610,7 @@ elif app_view == "Trends":
         
         # Ideal Target Path (Extrapolated from current EMA)
         last_filtered = df_window.iloc[-1][ema_col]
-        daily_rate = ideal_rates[metric][0] / 7.0
+        daily_rate = ideal_rates[metric][0] / 30.0
         ideal_vals = [last_filtered] + [last_filtered + daily_rate * x for x in range(1, 31)]
         fig.add_trace(go.Scatter(x=[df_window['Date'].max()] + traj_data[metric]['dates'][-30:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
         
@@ -618,15 +632,15 @@ elif app_view == "Analysis":
 
     last = df.iloc[-1]
     w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
-    wt = weekly_trends.get('Weight (kg)', 0)
+    wt = monthly_trends.get('Weight (kg)', 0)
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates)
 
     if len(df_window) >= 5:
-        bft, mmt = weekly_trends['Body Fat (%)'], weekly_trends['Muscle Mass (kg)']
+        bft, mmt = monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
         c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
         c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
-        bf_disp = f"""<div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/wk</div>"""
-        mm_disp = f"""<div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/wk</div>"""
+        bf_disp = f"""<div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>"""
+        mm_disp = f"""<div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>"""
     else:
         bf_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df_window)}/5)</div>"""
         mm_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df_window)}/5)</div>"""
@@ -637,7 +651,7 @@ elif app_view == "Analysis":
         <div class="mini-cell">
             <span class="mini-lbl">Weight</span>
             <span class="mini-val">{w:.1f}</span>
-            <div class="mini-sub {c_w}">{sgn(wt)}{wt:.2f} kg/wk</div>
+            <div class="mini-sub {c_w}">{sgn(wt)}{wt:.2f} kg/mo</div>
         </div>
         <div class="mini-cell">
             <span class="mini-lbl">Muscle Mass</span>
@@ -653,11 +667,11 @@ elif app_view == "Analysis":
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/wk"), unsafe_allow_html=True)
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo"), unsafe_allow_html=True)
     if len(df_window) >= 5:
         st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/wk") +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/wk"),
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
             unsafe_allow_html=True
         )
 
@@ -666,20 +680,20 @@ elif app_view == "Analysis":
     diags = []
     
     if wt > w_upper:
-        diags.append(hud_card("c-err", "↓", "OVER UPPER LIMIT", f"Weight accumulation ({wt:.2f} kg/wk) exceeds limits. Reduce caloric intake by 200-300 kcal."))
+        diags.append(hud_card("c-err", "↓", "OVER UPPER LIMIT", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Reduce caloric intake by 200-300 kcal."))
     elif wt < w_lower:
         if w_lower < 0:
-            diags.append(hud_card("c-err", "⚠️", "CATABOLIC DANGER", f"Losing weight too rapidly ({wt:.2f} kg/wk). Increase caloric intake immediately."))
+            diags.append(hud_card("c-err", "⚠️", "CATABOLIC DANGER", f"Losing weight too rapidly ({wt:.2f} kg/mo). Increase caloric intake immediately."))
         else:
-            diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/wk. Increase daily caloric intake by 200-300 kcal."))
+            diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
     
     if len(df_window) >= 5:
         m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
         bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
         if wt >= w_lower and mmt < m_lower:
-            diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/wk). Ensure high protein intake (1.6-2.2g/kg)."))
+            diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/mo). Ensure high protein intake (1.6-2.2g/kg)."))
         if bft > bf_upper:
-            diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/wk) exceeds limits. Dial back carbs/fats slightly."))
+            diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
             
     if not diags:
         diags.append(hud_card("c-ok", "✓", "LOCKED IN", "All tracked parameters are within optimal bounds. Stay the course."))
@@ -761,8 +775,7 @@ elif app_view == "Data":
                     delete_row_from_gsheet(st.session_state['sheet_url'], i)
                     st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
                     load_data.clear()
-                    st.success("✅ RECORD PURGED")
-                    time.sleep(1)
+                    system_alert("RECORD PURGED", "err")
                     st.rerun()
 
 elif app_view == "Settings":
@@ -783,25 +796,24 @@ elif app_view == "Settings":
             if st.button("Add to Rotation"):
                 if new_quote and new_quote not in st.session_state['all_quotes']:
                     st.session_state['all_quotes'].append(new_quote)
-                    st.success("✅ QUOTE INJECTED")
-                    time.sleep(1)
+                    system_alert("QUOTE INJECTED")
                     st.rerun()
 
     st.markdown('<div class="settings-lbl" style="margin-top:2.5rem;">Protocol Configuration</div>', unsafe_allow_html=True)
     edit_goal = st.selectbox("Select Protocol to Modify", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
     p = GOAL_PROFILES[edit_goal]
     with st.form("settings_form", border=False):
-        st.markdown(f"<div class='s-head'>Weight Trajectory (kg/wk)</div>", unsafe_allow_html=True)
-        w_tgt = st.slider("Target", min_value=-1.5, max_value=1.5, value=float(p['Weight (kg)'][0]), step=0.05)
-        w_min = st.slider("Lower Bound", min_value=-1.5, max_value=1.5, value=float(p['Weight (kg)'][1]), step=0.05)
-        w_max = st.slider("Upper Bound", min_value=-1.5, max_value=1.5, value=float(p['Weight (kg)'][2]), step=0.05)
-        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Muscle Mass Trajectory (kg/wk)</div>", unsafe_allow_html=True)
-        m_tgt = st.slider("Target ", min_value=-0.5, max_value=0.5, value=float(p['Muscle Mass (kg)'][0]), step=0.01)
-        m_min = st.slider("Lower Bound ", min_value=-0.5, max_value=0.5, value=float(p['Muscle Mass (kg)'][1]), step=0.01)
-        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Body Fat Trajectory (%/wk)</div>", unsafe_allow_html=True)
-        bf_tgt = st.slider("Target  ", min_value=-1.0, max_value=1.0, value=float(p['Body Fat (%)'][0]), step=0.05)
-        bf_min = st.slider("Lower Bound  ", min_value=-1.0, max_value=1.0, value=float(p['Body Fat (%)'][1]), step=0.05)
-        bf_max = st.slider("Upper Bound  ", min_value=-1.0, max_value=1.0, value=float(p['Body Fat (%)'][2]), step=0.05)
+        st.markdown(f"<div class='s-head'>Weight Trajectory (kg/mo)</div>", unsafe_allow_html=True)
+        w_tgt = st.slider("Target", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][0]), step=0.1)
+        w_min = st.slider("Lower Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][1]), step=0.1)
+        w_max = st.slider("Upper Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][2]), step=0.1)
+        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Muscle Mass Trajectory (kg/mo)</div>", unsafe_allow_html=True)
+        m_tgt = st.slider("Target ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][0]), step=0.1)
+        m_min = st.slider("Lower Bound ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][1]), step=0.1)
+        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Body Fat Trajectory (%/mo)</div>", unsafe_allow_html=True)
+        bf_tgt = st.slider("Target  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][0]), step=0.1)
+        bf_min = st.slider("Lower Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][1]), step=0.1)
+        bf_max = st.slider("Upper Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][2]), step=0.1)
         st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Achievements Engine Start Date</div>", unsafe_allow_html=True)
         new_start = st.date_input("Start Date", value=st.session_state['gym_start_date'])
         
@@ -812,10 +824,10 @@ elif app_view == "Settings":
                 'Body Fat (%)': [bf_tgt, bf_min, bf_max]
             }
             st.session_state['gym_start_date'] = new_start
-            st.success("✅ SYSTEM CONFIGURATION SAVED")
-            time.sleep(1)
+            system_alert("SYSTEM CONFIGURATION SAVED")
             st.rerun()
 
+    # ── ADMIN CONTROL (only for admin) ──
     if st.session_state.get('is_admin'):
         st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
         if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
