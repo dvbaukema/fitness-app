@@ -6,6 +6,7 @@ import random
 import re
 from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
+import time
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -155,7 +156,7 @@ def overwrite_gsheet(sheet_url, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# LOAD ALL KEYS FROM SECRETS (no hardcoded fallbacks)
+# LOAD ALL KEYS FROM SECRETS
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -227,7 +228,7 @@ if 'goal_profiles' not in st.session_state:
     }
 
 # ══════════════════════════════════════════════════════════════
-# OBSIDIAN THEME CSS (unchanged)
+# OBSIDIAN THEME CSS
 # ══════════════════════════════════════════════════════════════
 css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -315,10 +316,15 @@ div[data-testid="stSegmentedControl"] [aria-checked="true"] label { color: var(-
 .prog-fill { height: 100%; background: var(--c-emerald); border-radius: 3px; }
 
 div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
+div[data-testid="stSliderTickBarMin"], div[data-testid="stSliderTickBarMax"] { font-family: 'JetBrains Mono', monospace !important; font-size: 0.6rem !important; color: var(--text-subtle) !important; margin-top: -5px !important;}
+div[data-testid="thumbValue"] { font-family: 'JetBrains Mono', monospace !important; font-size: 1.2rem !important; font-weight: 800 !important; color: var(--text-main) !important; }
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
+div[data-testid="stSlider"] > div > div > div::after { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 3px; background: rgba(255,255,255,0.25); border-radius: 2px; z-index: 1; }
 div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
 
-div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
+div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; padding-top: 0.4rem !important; padding-bottom: 0.4rem !important;}
+div[data-testid="stTextInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; padding-top: 0.4rem !important; padding-bottom: 0.4rem !important;}
+div[data-testid="stTextInput"] input { color: var(--text-main) !important; font-family: 'JetBrains Mono', monospace !important; font-size: 1rem !important; text-align: center !important;}
 
 div[data-testid="stForm"] button, .stButton>button {
     background: var(--text-main) !important; color: var(--bg-primary) !important; 
@@ -328,7 +334,13 @@ div[data-testid="stForm"] button, .stButton>button {
 }
 .stButton>button { border: 2px solid var(--border-strong) !important; background: var(--surface) !important; color: var(--text-main) !important; padding: 2.5rem 1rem !important; font-size: 1.5rem !important; margin-top: 0 !important; }
 div[data-testid="stDateInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; height: 3rem !important; }
-[data-testid="stDataFrame"] { border-radius: 8px; border: 1px solid var(--border); }
+
+/* DATA EDITOR CLEAUP */
+[data-testid="stDataFrame"] { border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+[data-testid="stDataFrame"] div { background-color: var(--surface) !important; }
+[data-testid="stDataFrame"] table { background-color: transparent !important; }
+[data-testid="stDataFrame"] th { background-color: var(--surface-active) !important; border-bottom: 1px solid var(--border) !important; color: var(--text-muted) !important; font-family: 'Inter', sans-serif !important; font-size: 0.75rem !important; text-transform: uppercase;}
+[data-testid="stDataFrame"] td { background-color: transparent !important; border-bottom: 1px solid var(--border) !important; color: var(--text-main) !important; font-family: 'JetBrains Mono', monospace !important;}
 div[data-testid="stForm"] { margin-bottom: 1rem !important; }
 </style>
 """
@@ -434,7 +446,6 @@ def traj_bar(label, actual, metric, profile, unit):
         pos_tgt = min((abs(tgt) / max_bound) * 100, 95)
         bounds_html = f"<div style='position:relative; height:12px; font-family:\"JetBrains Mono\", monospace; font-size:0.55rem; color:var(--text-subtle); margin-top:2px;'><span style='position:absolute; left:{pos_min}%; transform:translateX(-50%);'>MIN {profile[metric][1]:.1f}</span><span style='position:absolute; left:{pos_tgt}%; transform:translateX(-50%); color:var(--text-main); font-weight:700;'>TARGET {tgt:.1f}</span><span style='position:absolute; right:0;'>MAX ∞</span></div>"
     else:
-        # For Weight and Body Fat, use real values mapped to [-max_bound, +max_bound]
         max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt), 0.1) * 2.5
         def to_pct(val):
             return (val + max_bound) / (2 * max_bound) * 100
@@ -487,8 +498,11 @@ METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
-has_enough_data = len(df) >= 3
-if has_enough_data:
+# 1. DYNAMIC CALIBRATION REQUIREMENTS
+has_enough_weight_data = len(df) >= 3
+has_enough_comp_data = len(df) >= 5
+
+if has_enough_weight_data:
     cutoff = df['Date'].max() - timedelta(days=45)
     recent_df = df[df['Date'] >= cutoff]
     if len(recent_df) < 4: recent_df = df.tail(5)
@@ -499,10 +513,11 @@ if has_enough_data:
 
     monthly_trends, traj_data = {}, {}
     for m in METRICS:
-        model = LinearRegression().fit(recent_days, recent_df[m].values)
-        monthly_trends[m] = model.coef_[0] * 30
-        traj_data[m] = {'dates': list(recent_df['Date']) + future_dates,
-                        'preds': model.predict(np.vstack((recent_days, future_days)))}
+        if (m == 'Weight (kg)' and has_enough_weight_data) or (m != 'Weight (kg)' and has_enough_comp_data):
+            model = LinearRegression().fit(recent_days, recent_df[m].values)
+            monthly_trends[m] = model.coef_[0] * 30
+            traj_data[m] = {'dates': list(recent_df['Date']) + future_dates,
+                            'preds': model.predict(np.vstack((recent_days, future_days)))}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -511,7 +526,8 @@ active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES[active_goal]
 
 header_placeholder = st.empty()
-app_view = st.segmented_control("Nav", ["Entry", "Analysis", "Trends", "Data", "Settings"],
+# 2. NAVIGATION FLIPPED
+app_view = st.segmented_control("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"],
                                 default="Entry", label_visibility="collapsed")
 
 if app_view == "Entry":
@@ -519,7 +535,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V23 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V25 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -589,26 +605,37 @@ if app_view == "Entry":
             st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
             load_data.clear()
             if success:
-                st.success("✅ Record saved to Google Sheets!")
+                st.toast("✅ Record saved successfully!", icon="🔥")
             else:
-                st.warning("⚠️ Record saved locally only.")
+                st.toast("⚠️ Record saved locally only.", icon="💾")
+            time.sleep(0.5)
             if st.session_state['enable_quotes']:
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             st.rerun()
 
 elif app_view == "Analysis":
     header_placeholder.empty()
-    if not has_enough_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
+    
+    if not has_enough_weight_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     last = df.iloc[-1]
     w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
-    wt, bft, mmt = monthly_trends['Weight (kg)'], monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
-
+    wt = monthly_trends.get('Weight (kg)', 0)
+    
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates)
-    c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
-    c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
+
+    # Handle display logic if composition data is still calibrating (requires 5 logs)
+    if has_enough_comp_data:
+        bft, mmt = monthly_trends['Body Fat (%)'], monthly_trends['Muscle Mass (kg)']
+        c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates)
+        c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates)
+        bf_disp = f"""<div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>"""
+        mm_disp = f"""<div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>"""
+    else:
+        bf_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
+        mm_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
 
     st.markdown(f"""
     <div class="s-head" style="margin-top:0;">Performance Data</div>
@@ -621,29 +648,29 @@ elif app_view == "Analysis":
         <div class="mini-cell">
             <span class="mini-lbl">Muscle Mass</span>
             <span class="mini-val">{mm:.1f}</span>
-            <div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>
+            {mm_disp}
         </div>
         <div class="mini-cell">
             <span class="mini-lbl">Body Fat</span>
             <span class="mini-val">{bf:.1f}</span>
-            <div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>
+            {bf_disp}
         </div>
     </div>
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    st.markdown(
-        traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo") +
-        traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
-        traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
-        unsafe_allow_html=True
-    )
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo"), unsafe_allow_html=True)
+    if has_enough_comp_data:
+        st.markdown(
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo") +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo"),
+            unsafe_allow_html=True
+        )
 
     st.markdown('<div class="s-head">System Diagnostics</div>', unsafe_allow_html=True)
     w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
-    m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
-    bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
     diags = []
+    
     if wt > w_upper:
         diags.append(hud_card("c-err", "↓", "OVER UPPER LIMIT", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Reduce caloric intake by 200-300 kcal."))
     elif wt < w_lower:
@@ -651,10 +678,15 @@ elif app_view == "Analysis":
             diags.append(hud_card("c-err", "⚠️", "CATABOLIC DANGER", f"Losing weight too rapidly ({wt:.2f} kg/mo). Increase caloric intake immediately."))
         else:
             diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
-    if wt >= w_lower and mmt < m_lower:
-        diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/mo). Ensure high protein intake (1.6-2.2g/kg)."))
-    if bft > bf_upper:
-        diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
+    
+    if has_enough_comp_data:
+        m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
+        bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
+        if wt >= w_lower and mmt < m_lower:
+            diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/mo). Ensure high protein intake (1.6-2.2g/kg)."))
+        if bft > bf_upper:
+            diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
+            
     if not diags:
         diags.append(hud_card("c-ok", "✓", "LOCKED IN", "All tracked parameters are within optimal bounds. Stay the course."))
     for d in diags:
@@ -713,12 +745,15 @@ elif app_view == "Analysis":
 
 elif app_view == "Trends":
     header_placeholder.empty()
-    if not has_enough_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements. Currently: {len(df)}/3."), unsafe_allow_html=True)
+    if not has_enough_weight_data:
+        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3+ logged measurements to generate trends. Currently: {len(df)}/3."), unsafe_allow_html=True)
         st.stop()
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
     for metric in METRICS:
+        if metric != 'Weight (kg)' and not has_enough_comp_data:
+            continue
+            
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
         trend = monthly_trends[metric]
@@ -761,11 +796,13 @@ elif app_view == "Data":
     display_df = df.copy()
     if 'Days' in display_df.columns:
         display_df = display_df.drop(columns=['Days'])
-    display_df['Date'] = display_df['Date'].dt.strftime('%d %b %Y')
+    display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d')
+    
+    # Render native sleek table
     edited_df = st.data_editor(
-        display_df, num_rows="dynamic", use_container_width=True, hide_index=False,
+        display_df, num_rows="dynamic", use_container_width=True, hide_index=True,
         column_config={
-            "Date": st.column_config.TextColumn("Date", disabled=True),
+            "Date": st.column_config.TextColumn("Date", disabled=False),
             "Weight (kg)": st.column_config.NumberColumn("Weight", format="%.1f"),
             "Muscle Mass (kg)": st.column_config.NumberColumn("Muscle Mass", format="%.1f"),
             "Body Fat (%)": st.column_config.NumberColumn("Fat %", format="%.1f")
@@ -777,21 +814,17 @@ elif app_view == "Data":
         st.session_state['active_df'] = edited_df
         load_data.clear()
         if success:
-            st.success("✅ Google Sheets updated successfully!")
+            st.toast("✅ Google Sheets updated successfully!", icon="🔥")
         else:
-            st.warning("⚠️ Local state updated. Google Sheets sync failed.")
+            st.toast("⚠️ Local state updated. Google Sheets sync failed.", icon="💾")
+        time.sleep(0.5)
         st.rerun()
 
 elif app_view == "Settings":
     header_placeholder.empty()
 
-    if st.session_state['gsheets_available']:
-        st.markdown(f"<div style='font-size:0.7rem; color:var(--c-emerald); margin-bottom:1rem;'>🟢 Google Sheets API Connected</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div style='font-size:0.7rem; color:var(--c-amber); margin-bottom:1rem;'>🟡 Google Sheets API Not Connected</div>", unsafe_allow_html=True)
-
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
-    st.markdown(f"**Current User:** {get_display_name(st.session_state['current_user'])}")
+    st.markdown(f"<div style='font-size:1rem; font-weight:700; color:var(--text-main); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
     st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state['enable_quotes'])
@@ -831,11 +864,12 @@ elif app_view == "Settings":
                 'Body Fat (%)': [bf_tgt, bf_min, bf_max]
             }
             st.session_state['gym_start_date'] = new_start
-            st.success("✅ Protocol updated!")
+            st.toast("✅ Protocol updated!", icon="🔥")
+            time.sleep(0.5)
             st.rerun()
 
     # ── ADMIN CONTROL (only for admin) ──
-    if st.session_state['is_admin']:
+    if st.session_state.get('is_admin'):
         st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
         if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
