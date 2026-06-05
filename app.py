@@ -780,7 +780,7 @@ elif app_view == "Analysis":
     if has_enough_comp_data:
         st.markdown(
             traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", mmt, bft),
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "kg/mo", mmt, bft),
             unsafe_allow_html=True
         )
 
