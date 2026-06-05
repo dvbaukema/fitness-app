@@ -56,17 +56,14 @@ st.markdown("""
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
     
-    // Sync User
     const savedUser = localStorage.getItem('metrics_user');
     if (savedUser && !urlParams.has('user')) { urlParams.set('user', savedUser); redirect = true; } 
     else if (urlParams.has('user')) { localStorage.setItem('metrics_user', urlParams.get('user')); }
     
-    // Sync Goal Protocol
     const savedGoal = localStorage.getItem('metrics_goal');
     if (savedGoal && !urlParams.has('goal')) { urlParams.set('goal', savedGoal); redirect = true; } 
     else if (urlParams.has('goal')) { localStorage.setItem('metrics_goal', urlParams.get('goal')); }
     
-    // Sync Analysis Start Date
     const savedStart = localStorage.getItem('metrics_start');
     if (savedStart && !urlParams.has('start')) { urlParams.set('start', savedStart); redirect = true; } 
     else if (urlParams.has('start')) { localStorage.setItem('metrics_start', urlParams.get('start')); }
@@ -86,9 +83,7 @@ st.markdown("""
 def get_google_sheets_service():
     try:
         credentials_dict = dict(st.secrets["gcp_service_account"])
-        creds = service_account.Credentials.from_service_account_info(
-            credentials_dict, scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+        creds = service_account.Credentials.from_service_account_info(credentials_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
         return build('sheets', 'v4', credentials=creds)
     except Exception:
         return None
@@ -103,28 +98,22 @@ def extract_sheet_id(url):
 def read_gsheet(sheet_url):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id:
-        return read_gsheet_csv(sheet_url)
+    if not service or not sheet_id: return read_gsheet_csv(sheet_url)
     try:
         result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='A:E').execute()
         values = result.get('values', [])
-        if not values or len(values) < 2:
-            return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
+        if not values or len(values) < 2: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
         headers = values[0]
         data = values[1:]
         df = pd.DataFrame(data, columns=headers)
         if 'Time' in df.columns:
-            df['DateTime'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-            df['Date'] = df['DateTime']
-            df = df.drop(columns=['Time', 'DateTime'])
+            df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
         else:
             df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
         for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
             df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
-        df = df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
-        return df.sort_values('Date').dropna().reset_index(drop=True)
-    except HttpError as e:
-        st.error(f"Google Sheets API error: {e}")
+        return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
+    except HttpError:
         return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
 
 def read_gsheet_csv(sheet_url):
@@ -146,31 +135,26 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
         time_str = datetime.now().strftime('%H:%M:%S')
         values = [[date_str, time_str, weight, body_fat, muscle_mass]]
         body = {'values': values}
-        service.spreadsheets().values().append(
-            spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
+        service.spreadsheets().values().append(spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
         return True
     except HttpError:
         return False
 
 def overwrite_gsheet(sheet_url, df):
-    # This is the 100% safe way to delete rows. It mirrors the exact cleaned dataframe back to the sheet.
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
         service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='A:Z').execute()
-        headers = ['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']
-        values = [headers]
+        values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
         for _, row in df.iterrows():
-            date_val = pd.Timestamp(row['Date'])
-            values.append([date_val.strftime('%Y-%m-%d'), date_val.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
+            d = pd.Timestamp(row['Date'])
+            values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
         body = {'values': values}
-        service.spreadsheets().values().update(
-            spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', body=body).execute()
+        service.spreadsheets().values().update(spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', body=body).execute()
         return True
     except HttpError:
         return False
-
 
 # ══════════════════════════════════════════════════════════════
 # LOAD SECRETS & DIRECTORY
@@ -183,7 +167,6 @@ admin_key = st.secrets.get("admin_user_key", "Admin")
 
 USER_DATA = {dan_key: dan_url, bram_key: bram_url}
 KEY_TO_LABEL = {dan_key: "Daniel", bram_key: "Bram"}
-
 def get_display_name(user_key): return KEY_TO_LABEL.get(user_key, "Unknown User")
 
 DEFAULT_QUOTES = [
@@ -215,9 +198,7 @@ if 'enable_achievements' not in st.session_state: st.session_state['enable_achie
 if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = datetime(2026, 3, 17).date()
 if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
-# Sync URL to Session State
-if 'current_goal' not in st.session_state: 
-    st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
+if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
 if 'analysis_start_date' not in st.session_state:
     default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
@@ -416,6 +397,7 @@ def traj_bar(label, actual, metric, profile, unit):
     s = sgn(actual); ts = sgn(tgt)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual, profile)
     
+    # Mathematical normalization to ensure pin never leaves track and CSS flexbox to prevent text overlap
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt), abs(actual), 0.1) * 1.3
         bounds_html = f"<div style='display:flex; justify-content:space-between; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TARGET {tgt:.2f}</span><span>MAX ∞</span></div>"
@@ -442,6 +424,7 @@ def traj_bar(label, actual, metric, profile, unit):
         <div class='tj-st {c_txt}'>{status}</div>
     </div>"""
 
+
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING
 # ══════════════════════════════════════════════════════════════
@@ -467,10 +450,12 @@ METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS',
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
 
 # ── MATHEMATICAL ENGINE (MANUAL START DATE & RAW REGRESSION) ──
-# Filters data starting from the user's selected Analysis Start Date
 analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
+
+# Filter data to active window
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
+# Safety fallback: if custom window is too small, fallback to entire dataset so it doesn't crash
 has_enough_weight_data = len(df_window_full) >= 3 or len(df) >= 3
 has_enough_comp_data = len(df_window_full) >= 5 or len(df) >= 5
 
@@ -478,7 +463,6 @@ monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
 
 if has_enough_weight_data:
-    # If the custom window has fewer than 3 points, fallback to the last 3 points in entire dataset
     df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
     recent_dfs_for_plot['Weight (kg)'] = df_w 
     
@@ -488,27 +472,29 @@ if has_enough_weight_data:
     
     monthly_trends['Weight (kg)'] = model_w.coef_[0] * 30  # kg/mo
     
-    future_days_w  = np.array([[(df_w['Date'].max() - df_w['Date'].min()).days + i] for i in range(1, 31)])
-    future_dates_w = [df_w['Date'].max() + timedelta(days=i) for i in range(1, 31)]
-    traj_data['Weight (kg)'] = {'dates': list(df_w['Date']) + future_dates_w, 'preds': model_w.predict(np.vstack((X_w, future_days_w)))}
+    # Calculate regression line starting from the exact Epoch line
+    start_day = (df_w['Date'].min() - df_w['Date'].min()).days
+    future_days_w  = np.array([[start_day + i] for i in range(1, 91)])
+    future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(1, 91)]
+    traj_data['Weight (kg)'] = {'dates': future_dates_w, 'preds': model_w.predict(future_days_w)}
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5)
     X_c = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values.reshape(-1, 1)
-    future_days_c  = np.array([[(df_c['Date'].max() - df_c['Date'].min()).days + i] for i in range(1, 31)])
-    future_dates_c = [df_c['Date'].max() + timedelta(days=i) for i in range(1, 31)]
+    start_day_c = (df_c['Date'].min() - df_c['Date'].min()).days
+    future_days_c  = np.array([[start_day_c + i] for i in range(1, 91)])
+    future_dates_c = [df_c['Date'].min() + timedelta(days=i) for i in range(1, 91)]
     
     for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
         recent_dfs_for_plot[m] = df_c
         y_c = df_c[m].values
         model_c = LinearRegression().fit(X_c, y_c)
         monthly_trends[m] = model_c.coef_[0] * 30 # per month
-        traj_data[m] = {'dates': list(df_c['Date']) + future_dates_c, 'preds': model_c.predict(np.vstack((X_c, future_days_c)))}
+        traj_data[m] = {'dates': future_dates_c, 'preds': model_c.predict(future_days_c)}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
-# Sync Protocol from URL parameters dynamically
 if "goal" in st.query_params:
     st.session_state['current_goal'] = st.query_params.get("goal")
 
@@ -524,7 +510,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V31 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V32 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -535,7 +521,6 @@ if app_view == "Entry":
             st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
         st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['daily_quote']}\"</div></div>", unsafe_allow_html=True)
 
-    # Automatically saves protocol selection to URL for persistence
     selected = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
     if selected != st.session_state['current_goal']:
         st.session_state['current_goal'] = selected
@@ -552,18 +537,18 @@ if app_view == "Entry":
     if len(df) > 0:
         recent_bf_avg = df.tail(7)['Body Fat (%)'].mean()
         if "Bulk" in st.session_state['current_goal'] and recent_bf_avg > 18.0:
-            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ HIGH FAT FOR BULK ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ HIGH FAT FOR BULK ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
-            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='margin-bottom:1.5rem; padding:8px; border-radius:6px; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
 
     delta_w = last['Weight (kg)'] - prev['Weight (kg)']
     delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
     delta_m = last['Muscle Mass (kg)'] - prev['Muscle Mass (kg)']
 
     st.markdown(f"""
-    <div class="mini-grid">
+    <div class="mini-grid" style="margin-top:1.5rem;">
         <div class="mini-cell">
             <span class="mini-lbl">Weight</span>
             <span class="mini-val">{last['Weight (kg)']:.1f}<span class="mini-unit">kg</span></span>
@@ -628,34 +613,38 @@ elif app_view == "Trends":
             <div class="chart-meta">
                 <div style="font-size:0.75rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f} <span style="font-size:0.6rem; color:var(--text-muted);">{unit}</span></span></div>
                 <div>
-                    <span class="t-chip {c_bg} {c_txt}">ACT {sgn(trend)}{trend:.2f} /mo</span>
-                    <span class="t-chip bg-neu c-neu" style="margin-left:4px;">TGT {sgn(target)}{target:.2f} /mo</span>
+                    <span class="t-chip {c_bg} {c_txt}">ACTUAL {sgn(trend)}{trend:.2f} /mo</span>
+                    <span class="t-chip bg-neu c-neu" style="margin-left:4px;">TARGET {sgn(target)}{target:.2f} /mo</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
         fig = go.Figure()
         
-        # Raw historical data (outside the analysis window)
+        # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
-        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines', name='History', line=dict(color='rgba(150,150,150,0.2)', width=1), hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
         
-        # Raw Data Points fed into the regression
+        # Active Data (After Start Epoch) - Solid Blue
         spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Recent', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        
+        # Epoch Line (Analysis Start Date)
+        epoch_date = spec_recent['Date'].min()
+        fig.add_vline(x=epoch_date, line_width=1.5, line_dash="dash", line_color="var(--text-muted)", annotation_text="START", annotation_position="top left", annotation_font_size=8)
         
         # Regression Trajectory Path
         fig.add_trace(go.Scatter(x=traj_data[metric]['dates'], y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
         
-        # Ideal Target Path 
-        last_filtered = spec_recent.iloc[-1][metric]
+        # Ideal Target Path (starts from the start of the Epoch)
+        first_epoch_val = spec_recent.iloc[0][metric]
         daily_rate = ideal_rates[metric][0] / 30.0
-        ideal_vals = [last_filtered] + [last_filtered + daily_rate * x for x in range(1, 61)]
-        fig.add_trace(go.Scatter(x=[spec_recent['Date'].max()] + traj_data[metric]['dates'][-60:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+        ideal_vals = [first_epoch_val] + [first_epoch_val + daily_rate * x for x in range(1, 91)]
+        fig.add_trace(go.Scatter(x=[epoch_date] + traj_data[metric]['dates'][-90:], y=ideal_vals, mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=0, b=5), height=140, showlegend=True,
+            margin=dict(l=0, r=0, t=20, b=5), height=140, showlegend=True,
             legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d'),
             yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
@@ -814,9 +803,8 @@ elif app_view == "Data":
         with c2:
             if pd.Timestamp(row['Date']) >= seven_days_ago:
                 if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    new_df = df.drop(index=i).reset_index(drop=True)
-                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
-                    st.session_state['active_df'] = new_df
+                    delete_row_from_gsheet(st.session_state['sheet_url'], i)
+                    st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
                     load_data.clear()
                     system_alert("RECORD PURGED", "err")
                     st.rerun()
@@ -851,14 +839,44 @@ elif app_view == "Settings":
         system_alert("ENGINE RE-CALIBRATED")
         st.rerun()
 
-    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">System Control</div>', unsafe_allow_html=True)
-    if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-        st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
-        st.session_state['auth_status'] = False
-        st.session_state['current_user'] = None
-        st.session_state['sheet_url'] = ""
-        if 'active_df' in st.session_state:
-            del st.session_state['active_df']
-        st.query_params.clear()
-        st.cache_data.clear()
-        st.rerun()
+    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem;">Protocol Configuration</div>', unsafe_allow_html=True)
+    edit_goal = st.selectbox("Select Protocol to Modify", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
+    p = GOAL_PROFILES[edit_goal]
+    with st.form("settings_form", border=False):
+        st.markdown(f"<div class='s-head'>Weight Trajectory (kg/mo)</div>", unsafe_allow_html=True)
+        w_tgt = st.slider("Target", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][0]), step=0.1, help="Your ideal monthly goal.")
+        w_min = st.slider("Lower Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][1]), step=0.1, help="The absolute minimum acceptable monthly pace.")
+        w_max = st.slider("Upper Bound", min_value=-5.0, max_value=5.0, value=float(p['Weight (kg)'][2]), step=0.1, help="The absolute maximum acceptable monthly pace.")
+        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Muscle Mass Trajectory (kg/mo)</div>", unsafe_allow_html=True)
+        m_tgt = st.slider("Target ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][0]), step=0.1)
+        m_min = st.slider("Lower Bound ", min_value=-2.0, max_value=2.0, value=float(p['Muscle Mass (kg)'][1]), step=0.1)
+        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Body Fat Trajectory (%/mo)</div>", unsafe_allow_html=True)
+        bf_tgt = st.slider("Target  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][0]), step=0.1)
+        bf_min = st.slider("Lower Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][1]), step=0.1)
+        bf_max = st.slider("Upper Bound  ", min_value=-3.0, max_value=3.0, value=float(p['Body Fat (%)'][2]), step=0.1)
+        st.markdown(f"<div class='s-head' style='margin-top: 1.5rem;'>Achievements Engine Start Date</div>", unsafe_allow_html=True)
+        new_start = st.date_input("Start Date", value=st.session_state['gym_start_date'])
+        
+        if st.form_submit_button("SAVE PROTOCOL & SETTINGS", use_container_width=True):
+            st.session_state['goal_profiles'][edit_goal] = {
+                'Weight (kg)': [w_tgt, w_min, w_max],
+                'Muscle Mass (kg)': [m_tgt, m_min],
+                'Body Fat (%)': [bf_tgt, bf_min, bf_max]
+            }
+            st.session_state['gym_start_date'] = new_start
+            system_alert("SYSTEM CONFIGURATION SAVED")
+            st.rerun()
+
+    # ── ADMIN CONTROL (only for admin) ──
+    if st.session_state.get('is_admin'):
+        st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
+        if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
+            st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
+            st.session_state['auth_status'] = False
+            st.session_state['current_user'] = None
+            st.session_state['sheet_url'] = ""
+            if 'active_df' in st.session_state:
+                del st.session_state['active_df']
+            st.query_params.user = admin_key
+            st.cache_data.clear()
+            st.rerun()
