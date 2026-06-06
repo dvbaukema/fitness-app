@@ -124,7 +124,7 @@ def overwrite_sheet_range(sheet_url, range_name, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# SPECIFIC SHEET READ/WRITE HELPERS
+# SHEET‑SPECIFIC HELPERS
 # ══════════════════════════════════════════════════════════════
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Body!A:E')
@@ -166,15 +166,25 @@ def write_data_constants(sheet_url, height, gender, age):
     return overwrite_sheet_range(sheet_url, 'Data!A1:C2', pd.DataFrame(vals, columns=['Height', 'Gender', 'Age']))
 
 def load_workout_data(sheet_url):
-    df = read_sheet_range(sheet_url, 'Workout!A:F')
+    """Read Workout sheet with columns: Date, Exercise, Weight (kg), Reps set 1, Reps set 2, Reps set 3, Reps set 4"""
+    df = read_sheet_range(sheet_url, 'Workout!A:G')
     if df.empty:
-        return pd.DataFrame(columns=['Date', 'Workout Type', 'Exercise', 'Weight', 'Set', 'Reps'])
-    df.columns = ['Date', 'Workout Type', 'Exercise', 'Weight', 'Set', 'Reps']
+        return pd.DataFrame(columns=['Date','Exercise','Weight (kg)','Reps set 1','Reps set 2','Reps set 3','Reps set 4'])
+    # Ensure expected columns
+    expected = ['Date','Exercise','Weight (kg)','Reps set 1','Reps set 2','Reps set 3','Reps set 4']
+    for c in expected:
+        if c not in df.columns:
+            df[c] = '' if c == 'Exercise' else np.nan
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df['Weight'] = pd.to_numeric(df['Weight'], errors='coerce')
-    df['Set'] = pd.to_numeric(df['Set'], errors='coerce')
-    df['Reps'] = pd.to_numeric(df['Reps'], errors='coerce')
-    return df.dropna(subset=['Date', 'Exercise'])
+    df['Weight (kg)'] = pd.to_numeric(df['Weight (kg)'], errors='coerce')
+    for i in range(1,5):
+        col = f'Reps set {i}'
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+    return df[expected].dropna(subset=['Date','Exercise']).reset_index(drop=True)
+
+def append_workout_row(sheet_url, row):
+    """row: [date, exercise, weight, rep1, rep2, rep3, rep4]"""
+    return append_to_sheet(sheet_url, 'Workout!A:G', [row])
 
 # ══════════════════════════════════════════════════════════════
 # LOAD SECRETS & DIRECTORY
@@ -240,7 +250,7 @@ if 'nutrition_phase_start' not in st.session_state:
 if 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_data_constants(st.session_state['sheet_url'])
 
-# Workout state (exercises pre-defined, but could be extended)
+# Workout state (exercises pre-defined)
 if 'exercises' not in st.session_state:
     st.session_state['exercises'] = [
         {"Name": "DB Press (45°)", "Category": "Chest", "Muscle Group": "Upper Chest"},
@@ -266,7 +276,7 @@ if 'exercises' not in st.session_state:
     ]
 
 # ══════════════════════════════════════════════════════════════
-# CSS THEME & STYLES
+# CSS THEME & STYLES (same as before)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F0EDE8;
@@ -1098,22 +1108,18 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     return html_block
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION CONTEXT ADAPTIVE (NEW)
+# NUTRITION CONTEXT ADAPTIVE
 # ══════════════════════════════════════════════════════════════
 def get_context_adaptive_recommendation(protocol, weight_trend, bf_trend, current_offset, base_calories):
-    """Return (message, new_offset) using weight AND body‑fat trend."""
     w_lower, w_upper = DEFAULT_PROFILES[protocol]['Weight (kg)'][1], DEFAULT_PROFILES[protocol]['Weight (kg)'][2]
     bf_target, bf_lower, bf_upper = DEFAULT_PROFILES[protocol]['Body Fat (%)']
 
-    # Only decrease if both weight and fat are above upper bound (fat gain)
     if weight_trend > w_upper and bf_trend > bf_upper:
         return (f"Fat gain detected – weight +{weight_trend:.1f} kg/mo, fat +{bf_trend:.1f}%/mo. Consider reducing calories.",
                 current_offset - 200)
-    # If weight high but fat stable → muscle gain, maintain
     if weight_trend > w_upper and bf_trend <= bf_target:
         return (f"Lean mass progression – weight +{weight_trend:.1f} kg/mo, fat trend good. Maintain current intake.",
                 current_offset)
-    # Weight too low → increase
     if weight_trend < w_lower:
         if "Cut" in protocol:
             return (f"Weight loss too fast ({weight_trend:.1f} kg/mo). Increase calories to preserve muscle.",
@@ -1121,7 +1127,6 @@ def get_context_adaptive_recommendation(protocol, weight_trend, bf_trend, curren
         else:
             return (f"Weight gain below target ({weight_trend:.1f} kg/mo). Increase calories.",
                     current_offset + 250)
-    # Default no change
     return ("Trends are on track. No adjustment needed.", current_offset)
 
 # ══════════════════════════════════════════════════════════════
@@ -1307,7 +1312,7 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# TRENDS TAB (unchanged)
+# TRENDS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Trends":
     header_placeholder.empty()
@@ -1439,7 +1444,7 @@ elif app_view == "Trends":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# ANALYSIS TAB (unchanged, but might include nutrition hints later)
+# ANALYSIS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Analysis":
     header_placeholder.empty()
@@ -1498,6 +1503,7 @@ elif app_view == "Analysis":
 
     st.markdown('<div class="s-head">Diagnostics</div>', unsafe_allow_html=True)
     diags = []
+    w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
     
     is_muscle_driven = (wt > w_upper) and has_enough_comp_data and (mmt >= (wt * 0.4)) and (bft <= 0.2)
     bf_lower = ideal_rates['Body Fat (%)'][1] if len(ideal_rates['Body Fat (%)']) > 1 else -99
@@ -1712,7 +1718,7 @@ elif app_view == "Nutrition":
         st.info("Need at least 3 body weight + 5 composition entries for adaptive feedback.")
 
 # ══════════════════════════════════════════════════════════════
-# WORKOUT TAB (TEMPLATE-BASED)
+# WORKOUT TAB (MATCHING ACTUAL SHEET FORMAT)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Workout":
     header_placeholder.empty()
@@ -1774,21 +1780,20 @@ elif app_view == "Workout":
         log_data = []
         for ex_name, default_weight in exercises:
             st.markdown(f"**{ex_name}**")
-            # Prefill weight from last history
+            # Prefill weight from last logged entry
             if not workout_df.empty:
                 ex_hist = workout_df[workout_df['Exercise'] == ex_name]
-                last_weight = ex_hist['Weight'].values[0] if not ex_hist.empty else default_weight
-                if last_weight is None:
-                    last_weight = 0.0
+                last_weight = ex_hist['Weight (kg)'].values[0] if not ex_hist.empty else default_weight
+                if last_weight is None or last_weight == 0:
+                    last_weight = default_weight if default_weight else 0.0
             else:
                 last_weight = default_weight if default_weight else 0.0
 
             weight = st.number_input(f"{ex_name} Weight (kg)", value=float(last_weight),
                                      step=0.5, key=f"w_{ex_name}_{workout_type}")
-            sets = st.number_input("Number of sets", min_value=1, max_value=6, value=2, key=f"sets_{ex_name}_{workout_type}")
             reps = []
-            for s in range(sets):
-                rep_val = st.number_input(f"Set {s+1} reps", min_value=0, value=8, key=f"rep_{ex_name}_{s}_{workout_type}")
+            for s in range(4):  # always 4 sets, user can leave 0
+                rep_val = st.number_input(f"Set {s+1} reps", min_value=0, value=0, key=f"rep_{ex_name}_{s}_{workout_type}")
                 reps.append(rep_val)
             log_data.append((ex_name, weight, reps))
             st.markdown("---")
@@ -1796,10 +1801,10 @@ elif app_view == "Workout":
         workout_date = st.date_input("Workout Date", datetime.now().date())
         if st.form_submit_button("Log Workout"):
             for ex_name, weight, reps in log_data:
-                for s, rep in enumerate(reps):
-                    if rep > 0:
-                        append_to_sheet(st.session_state['sheet_url'], 'Workout!A:F',
-                                        [[workout_date.strftime('%Y-%m-%d'), workout_type, ex_name, weight, s+1, rep]])
+                # Only log if at least one set has reps > 0
+                if any(r > 0 for r in reps):
+                    row = [workout_date.strftime('%Y-%m-%d'), ex_name, weight] + reps
+                    append_workout_row(st.session_state['sheet_url'], row)
             system_alert("Workout saved")
             st.rerun()
 
