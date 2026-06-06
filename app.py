@@ -227,14 +227,13 @@ if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
-# CSS THEMES
+# CSS THEMES (TRUE SPOTIFY TABS & BRUTE FORCE LIGHT MODE)
 # ══════════════════════════════════════════════════════════════
 css_light = """
     :root {
-        --bg-primary: #F6F4F0; --text-main: #2A2A2A; --text-muted: rgba(42, 42, 42, 0.65); --text-subtle: rgba(42, 42, 42, 0.45);
-        --surface: #FFFFFF; --surface-active: #EAE6DF; --border: #E0DBD2; --border-strong: #C4BEB2;
+        --bg-primary: #F4F4F5; --text-main: #09090B; --text-muted: rgba(0,0,0,0.6); --text-subtle: rgba(0,0,0,0.5);
+        --surface: #FFFFFF; --surface-active: rgba(0,0,0,0.08); --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.25);
         --c-emerald: #10B981; --c-amber: #F59E0B; --c-rose: #EF4444; --c-blue: #3B82F6;
-        --input-bg: #FFFFFF; --input-text: #2A2A2A; --slider-track: #E0DBD2;
     }
 """
 css_dark = """
@@ -242,7 +241,6 @@ css_dark = """
         --bg-primary: #121212; --text-main: #FDFDFD; --text-muted: rgba(253, 253, 253, 0.65); --text-subtle: rgba(253, 253, 253, 0.4);
         --surface: #1E1E1E; --surface-active: #2C2C2C; --border: #2A2A2A; --border-strong: #444444;
         --c-emerald: #10B981; --c-amber: #F59E0B; --c-rose: #EF4444; --c-blue: #3B82F6;
-        --input-bg: var(--surface); --input-text: var(--text-main); --slider-track: var(--surface-active);
     }
 """
 
@@ -255,6 +253,12 @@ else:
 
 css = theme_vars + """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
+/* BRUTE FORCE THEME OVERRIDES FOR NATIVE STREAMLIT BUGS */
+[data-testid="stAppViewContainer"], [data-testid="stHeader"] { background-color: var(--bg-primary) !important; }
+.stMarkdown p, .stWidgetLabel, .stCheckbox label, .stToggle label, .stSelectbox label, .stDateInput label, .stTextInput label, .stSlider label { color: var(--text-main) !important; }
+[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; }
+[data-testid="stExpander"] summary p { color: var(--text-main) !important; font-weight: 600 !important; }
 
 .stApp { background: var(--bg-primary) !important; font-family: 'Inter', sans-serif !important; }
 .block-container { padding-top: 1rem !important; padding-bottom: 4rem !important; max-width: 600px !important; }
@@ -271,28 +275,39 @@ css = theme_vars + """
 .quote-box { text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 1.5rem;}
 .quote-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; color: var(--text-main); font-style: italic; font-weight: 500; letter-spacing: 0.2px;}
 
-/* ── TRUE FLOATING ISLAND TABS ── */
-div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; display: flex; justify-content: center; }
+/* ── SPOTIFY ISLAND TABS ── */
+div[data-testid="stSegmentedControl"] { 
+    display: flex; justify-content: center; margin-bottom: 2rem; 
+}
 div[data-testid="stSegmentedControl"] > div {
-    background-color: transparent !important;
+    background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    gap: 8px !important;
+    gap: 12px !important;
     padding: 0 !important;
 }
-div[data-testid="stSegmentedControl"] > div > div:not([data-testid="stSegmentedControlSegment"]) { display: none !important; opacity: 0 !important; }
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] {
-    background-color: var(--surface) !important;
-    border-radius: 25px !important;
+div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
+div[data-testid="stSegmentedControl"] label {
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
-    padding: 4px 6px !important;
+    border-radius: 50px !important; 
+    padding: 8px 16px !important;
+    margin: 0 !important;
+    box-shadow: none !important;
 }
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
-    background-color: var(--text-main) !important;
-    border: 1px solid var(--text-main) !important;
+div[data-testid="stSegmentedControl"] label p { 
+    color: var(--text-muted) !important; 
+    font-weight: 600 !important; 
+    font-size: 0.85rem !important; 
 }
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] p { color: var(--text-muted) !important; font-weight: 600 !important; font-size: 0.85rem !important; }
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] p { color: var(--bg-primary) !important; font-weight: 800 !important; }
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] {
+    background: var(--text-main) !important;
+    border-color: var(--text-main) !important;
+}
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] p { 
+    color: var(--bg-primary) !important; 
+    font-weight: 800 !important; 
+}
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
@@ -331,23 +346,23 @@ div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][
 .prog-fill { height: 100%; background: var(--c-blue); border-radius: 3px; }
 
 div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
-div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--slider-track) !important; position: relative !important;}
+div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
 div[data-testid="stSlider"] div[role="slider"] { width: 24px !important; height: 24px !important; background: #3B82F6 !important; border: 2px solid #FFFFFF !important; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4) !important; z-index: 2 !important; }
 
-/* Selector Controls & Inputs (Forces visibility in Light/Dark Mode) */
+/* Input Selectors */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
-div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--input-text) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
+div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
-div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; color: var(--input-text) !important;}
+div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; color: var(--text-main) !important;}
 
-div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--input-text) !important; display: flex !important; align-items: center !important; min-height: 3.5rem !important; overflow: hidden !important; padding: 0 !important;}
-div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'JetBrains Mono', monospace !important; font-size: 1.2rem !important; text-align: center !important; margin-bottom: 0 !important; border: none !important;}
+div[data-testid="stTextInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; min-height: 3.5rem !important; overflow: hidden !important; padding: 0 !important;}
+div[data-testid="stTextInput"] input { color: var(--text-main) !important; font-family: 'JetBrains Mono', monospace !important; font-size: 1.2rem !important; text-align: center !important; margin-bottom: 0 !important; border: none !important;}
 div[data-testid="stTextInput"] button { background: transparent !important; border: none !important; box-shadow: none !important; height: 2.5rem !important; width: 2.5rem !important; margin-right: 0.2rem !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; }
 div[data-testid="stTextInput"] button svg { width: 1.3rem !important; height: 1.3rem !important; fill: var(--text-subtle) !important; }
 
 div[data-testid="stForm"] button, .stButton>button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'Inter', sans-serif !important; font-weight: 800 !important; font-size: 0.95rem !important; border: none !important; border-radius: 12px !important; padding: 1rem !important; margin-top: 1.5rem !important; transition: transform 0.1s ease !important; text-transform: uppercase !important; letter-spacing: 1px !important; }
 .stButton>button { border: 2px solid var(--border-strong) !important; background: var(--surface) !important; color: var(--text-main) !important; padding: 2.5rem 1rem !important; font-size: 1.5rem !important; margin-top: 0 !important; }
-div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--input-text) !important; height: 3rem !important; }
+div[data-testid="stDateInput"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; height: 3rem !important; }
 
 button[aria-label="Step down"], button[aria-label="Step up"], button[title="Step down"], button[title="Step up"] { display: none !important; }
 </style>
@@ -433,7 +448,6 @@ def eval_metric(metric, actual, profile, mmt=None, bft=None):
     return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
 
 def get_gradient(metric, profile, max_mag, is_smart_override=False):
-    # Semantic Colors for Analysis Tab
     c_g = "var(--c-emerald)"
     c_o = "var(--c-amber)"
     c_r = "var(--c-rose)"
@@ -526,6 +540,7 @@ if has_enough_weight_data:
     X_w = X_w_raw.reshape(-1, 1)
     y_w = df_w['Weight (kg)'].values
     
+    # Regression & Confidence Intervals
     res_w = stats.linregress(X_w_raw, y_w)
     slope_w = res_w.slope
     stderr_w = res_w.stderr
@@ -538,6 +553,7 @@ if has_enough_weight_data:
         future_days_w  = np.array([[start_day_w + i] for i in range(0, days_to_end_w + 10)])
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
         
+        # Calculate Error Range
         pred_y_w = res_w.intercept + slope_w * future_days_w.flatten()
         margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96 # 95% CI
         
@@ -606,420 +622,4 @@ if app_view == "Entry":
     if st.session_state['enable_quotes']:
         if 'daily_quote' not in st.session_state:
             st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
-        st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['daily_quote']}\"</div></div>", unsafe_allow_html=True)
-
-    selected = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
-    if selected != st.session_state['current_goal']:
-        st.session_state['current_goal'] = selected
-        st.query_params.goal = selected
-        st.rerun()
-    
-    if len(df) > 0:
-        last = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else last
-    else:
-        last = pd.Series({'Weight (kg)': 70.0, 'Body Fat (%)': 15.0, 'Muscle Mass (kg)': 35.0})
-        prev = last
-
-    if len(df) > 0:
-        recent_bf_avg = df.tail(7)['Body Fat (%)'].mean()
-        if "Bulk" in st.session_state['current_goal'] and recent_bf_avg > 18.0:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ HIGH FAT FOR BULK ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
-        elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(59, 130, 246, 0.1); border:1px solid rgba(59, 130, 246, 0.2); font-size:0.7rem; color:var(--c-blue); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
-
-    delta_w = last['Weight (kg)'] - prev['Weight (kg)']
-    delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
-    delta_m = last['Muscle Mass (kg)'] - prev['Muscle Mass (kg)']
-
-    st.markdown(f"""
-    <div class="mini-grid" style="margin-top:1.5rem;">
-        <div class="mini-cell">
-            <span class="mini-lbl">Weight</span>
-            <span class="mini-val">{last['Weight (kg)']:.1f}<span class="mini-unit">kg</span></span>
-            <div class="mini-sub {dclass(delta_w, invert=('Cut' in active_goal))}">{sgn(delta_w)}{delta_w:.1f} kg</div>
-        </div>
-        <div class="mini-cell">
-            <span class="mini-lbl">Muscle Mass</span>
-            <span class="mini-val">{last['Muscle Mass (kg)']:.1f}<span class="mini-unit">kg</span></span>
-            <div class="mini-sub {dclass(delta_m)}">{sgn(delta_m)}{delta_m:.1f} kg</div>
-        </div>
-        <div class="mini-cell">
-            <span class="mini-lbl">Body Fat</span>
-            <span class="mini-val">{last['Body Fat (%)']:.1f}<span class="mini-unit">%</span></span>
-            <div class="mini-sub {dclass(delta_bf, invert=True)}">{sgn(delta_bf)}{delta_bf:.1f} %</div>
-        </div>
-    </div>
-    <div class="s-head">Record Entry</div>
-    """, unsafe_allow_html=True)
-
-    with st.form("log_form", border=False):
-        w_val = float(last['Weight (kg)'])
-        w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
-        m_val = float(last['Muscle Mass (kg)'])
-        m = st.slider("Muscle Mass (kg)", min_value=max(0.0, m_val-2.5), max_value=m_val+2.5, value=m_val, step=0.1)
-        bf_val = float(last['Body Fat (%)'])
-        bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
-
-        if st.form_submit_button("SAVE RECORD", use_container_width=True):
-            now = datetime.now()
-            date_str = now.strftime('%Y-%m-%d')
-            append_to_gsheet(st.session_state['sheet_url'], date_str, w, m, bf)
-            new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
-            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
-            load_data.clear()
-            if st.session_state['enable_quotes']:
-                st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
-            system_alert("DATABANK UPDATED")
-            st.rerun()
-
-elif app_view == "Trends":
-    header_placeholder.empty()
-    if not has_enough_weight_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for trends. Currently: {len(df)}/3."), unsafe_allow_html=True)
-        st.stop()
-        
-    if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
-
-    font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='var(--text-muted)')
-    for metric in METRICS:
-        if metric != 'Weight (kg)' and not has_enough_comp_data:
-            continue
-            
-        last_val = df.iloc[-1][metric]
-        unit = METRIC_UNIT[metric]
-        trend = monthly_trends[metric]
-        target = ideal_rates[metric][0]
-        c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
-        
-        # Calculate clean range projection
-        if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10] 
-            final_error = traj_data[metric]['final_error']
-            lower_proj = final_pred - final_error
-            upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"Inter\", sans-serif; font-size:0.75rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
-        else:
-            proj_html = ""
-        
-        st.markdown(f"""
-        <div class="chart-blk">
-            <div class="chart-meta" style="align-items: flex-start;">
-                <div>
-                    <div style="font-size:0.9rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">
-                        {METRIC_SHORT[metric]} 
-                        <span style="font-family:'Inter', sans-serif; font-weight:800; color:var(--text-main); margin-left:8px; font-size:1.5rem;">
-                            {last_val:.1f} <span style="font-size:0.9rem; color:var(--text-muted);">{unit}</span>
-                        </span>
-                    </div>
-                    {proj_html}
-                </div>
-                <div style="text-align: right;">
-                    <span class="t-chip {c_bg} {c_txt}" style="margin-bottom:4px;">ACTUAL {sgn(trend)}{trend:.2f} /mo</span><br>
-                    <span class="t-chip bg-neu c-neu">TARGET {sgn(target)}{target:.2f} /mo</span>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        fig = go.Figure()
-        
-        # Historical Data (Before Start Epoch) - Extreme Fade
-        df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
-        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
-        
-        # Active Data (After Start Epoch) - Solid Blue
-        spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2.5), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
-        
-        # Bold Start Epoch Line
-        epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="#888888", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="#888888")
-        
-        # Target Math
-        current_date = spec_recent['Date'].max()
-        daily_rate = ideal_rates[metric][0] / 30.0
-        
-        if metric == 'Weight (kg)':
-            start_x = epoch_date
-            start_y = spec_recent.iloc[0][metric]
-        elif metric == 'Muscle Mass (kg)':
-            start_x = current_date
-            start_y = spec_recent.iloc[-1][metric]
-        else:
-            start_x = current_date
-            start_y = spec_recent[metric].mean()
-            
-        days_span = (target_end_date.date() - start_x.date()).days
-        
-        if days_span > 0:
-            target_val_at_end = start_y + (daily_rate * days_span)
-            
-            # End Target Line
-            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="#10B981")
-            # End Target Marker
-            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="Inter"), hoverinfo='skip'))
-            # Target Path
-            fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
-
-        # Regression Trajectory Path w/ Error Cone (Confidence Interval)
-        if 'dates' in traj_data.get(metric, {}):
-            x_vals = traj_data[metric]['dates']
-            y_upper = traj_data[metric]['upper']
-            y_lower = traj_data[metric]['lower']
-            
-            # Fill Area for Confidence Interval
-            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
-            
-            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
-            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown("</div>", unsafe_allow_html=True)
-
-elif app_view == "Analysis":
-    header_placeholder.empty()
-    if not has_enough_weight_data:
-        st.markdown(hud_card("c-neu", "⏳", "CALIBRATING ENGINE", f"Need 3 logged measurements for basic tracking. Currently: {len(df)}/3."), unsafe_allow_html=True)
-        st.stop()
-
-    if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
-
-    last = df.iloc[-1]
-    w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
-    wt = monthly_trends.get('Weight (kg)', 0)
-    mmt = monthly_trends.get('Muscle Mass (kg)', 0)
-    bft = monthly_trends.get('Body Fat (%)', 0)
-
-    c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_rates, mmt, bft)
-
-    if has_enough_comp_data:
-        c_bf, _, _, _ = eval_metric('Body Fat (%)', bft, ideal_rates, mmt, bft)
-        c_mm, _, _, _ = eval_metric('Muscle Mass (kg)', mmt, ideal_rates, mmt, bft)
-        bf_disp = f"""<div class="mini-sub {c_bf}">{sgn(bft)}{bft:.2f} %/mo</div>"""
-        mm_disp = f"""<div class="mini-sub {c_mm}">{sgn(mmt)}{mmt:.2f} kg/mo</div>"""
-    else:
-        bf_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
-        mm_disp = f"""<div class="mini-sub c-neu">CALIBRATING ({len(df)}/5)</div>"""
-
-    st.markdown(f"""
-    <div class="s-head" style="margin-top:0;">Performance Data</div>
-    <div class="mini-grid">
-        <div class="mini-cell">
-            <span class="mini-lbl">Weight</span>
-            <span class="mini-val">{w:.1f}</span>
-            <div class="mini-sub {c_w}">{sgn(wt)}{wt:.2f} kg/mo</div>
-        </div>
-        <div class="mini-cell">
-            <span class="mini-lbl">Muscle Mass</span>
-            <span class="mini-val">{mm:.1f}</span>
-            {mm_disp}
-        </div>
-        <div class="mini-cell">
-            <span class="mini-lbl">Body Fat</span>
-            <span class="mini-val">{bf:.1f}</span>
-            {bf_disp}
-        </div>
-    </div>
-    <div class="s-head">Trajectory Logic</div>
-    """, unsafe_allow_html=True)
-
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_rates, "kg/mo", mmt, bft), unsafe_allow_html=True)
-    if has_enough_comp_data:
-        st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "kg/mo", mmt, bft),
-            unsafe_allow_html=True
-        )
-
-    st.markdown('<div class="s-head">System Diagnostics</div>', unsafe_allow_html=True)
-    w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
-    diags = []
-    
-    # ── SMART RECOMPOSITION DIAGNOSTICS ──
-    is_muscle_driven = (wt > w_upper) and has_enough_comp_data and (mmt >= (wt * 0.4)) and (bft <= 0.2)
-    is_fat_loss_driven = (wt < w_lower) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
-
-    if is_muscle_driven:
-        diags.append(hud_card("c-emerald", "🧬", "HYPER-ANABOLIC RESPONSE", f"Weight is increasing rapidly (+{wt:.2f} kg/mo), but it is heavily driven by muscle gain (+{mmt:.2f} kg/mo). Do not cut calories. Ride this muscle memory wave."))
-    elif is_fat_loss_driven:
-        diags.append(hud_card("c-emerald", "🔥", "HYPER-LIPOLYTIC RESPONSE", f"Weight is dropping fast ({wt:.2f} kg/mo), but muscle is preserved and fat is melting (-{abs(bft):.2f} %/mo). Excellent recomposition."))
-    elif wt > w_upper:
-        diags.append(hud_card("c-err", "↓", "OVER UPPER LIMIT", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Reduce caloric intake by 200-300 kcal."))
-    elif wt < w_lower:
-        if w_lower < 0:
-            diags.append(hud_card("c-err", "⚠️", "CATABOLIC DANGER", f"Losing weight too rapidly ({wt:.2f} kg/mo). Increase caloric intake immediately."))
-        else:
-            diags.append(hud_card("c-wrn", "↑", "ANABOLIC STALL", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
-    
-    if has_enough_comp_data and not is_muscle_driven and not is_fat_loss_driven:
-        m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
-        bf_tgt, bf_lower, bf_upper = ideal_rates['Body Fat (%)']
-        if wt >= w_lower and mmt < m_lower:
-            diags.append(hud_card("c-wrn", "⚠️", "LOW MUSCLE SYNTHESIS", f"Weight tracking properly, but muscle accumulation lagging ({mmt:.2f} kg/mo). Ensure high protein intake (1.6-2.2g/kg)."))
-        if bft > bf_upper:
-            diags.append(hud_card("c-err", "⚠️", "EXCESSIVE FAT GAIN", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
-            
-    if not diags:
-        diags.append(hud_card("c-ok", "✓", "LOCKED IN", "All tracked parameters are within optimal bounds. Stay the course."))
-    
-    for d in diags:
-        st.markdown(d, unsafe_allow_html=True)
-
-    if st.session_state.get('enable_achievements', True):
-        start_gym_time = st.session_state['gym_start_date']
-        days_elapsed = max(0, (datetime.now().date() - start_gym_time).days)
-        TIERS = [
-            {"name": "Day 1", "emoji": "👋", "days": 0},
-            {"name": "1 Week", "emoji": "🌱", "days": 7},
-            {"name": "2 Weeks", "emoji": "🌿", "days": 14},
-            {"name": "3 Weeks", "emoji": "🍃", "days": 21},
-            {"name": "4 Weeks", "emoji": "🪴", "days": 28},
-            {"name": "10 Weeks", "emoji": "🌲", "days": 70},
-            {"name": "15 Weeks", "emoji": "🌳", "days": 105},
-            {"name": "20 Weeks", "emoji": "🥉", "days": 140},
-            {"name": "25 Weeks", "emoji": "🥈", "days": 175},
-            {"name": "30 Weeks", "emoji": "🥇", "days": 210},
-            {"name": "40 Weeks", "emoji": "🏅", "days": 280},
-            {"name": "1 Year", "emoji": "🏆", "days": 365},
-            {"name": "2 Years", "emoji": "🔥", "days": 730},
-            {"name": "3 Years", "emoji": "⚡", "days": 1095},
-            {"name": "4 Years", "emoji": "🦾", "days": 1460},
-            {"name": "5 Years", "emoji": "⚙️", "days": 1825},
-            {"name": "6 Years", "emoji": "💎", "days": 2190},
-            {"name": "7 Years", "emoji": "🔮", "days": 2555},
-            {"name": "8 Years", "emoji": "👑", "days": 2920},
-            {"name": "9 Years", "emoji": "🚀", "days": 3285},
-            {"name": "10 Years", "emoji": "🌌", "days": 3650}
-        ]
-        current_tier_idx = 0
-        for i, t in enumerate(TIERS):
-            if days_elapsed >= t["days"]: current_tier_idx = i
-
-        st.markdown('<div class="s-head">Achievements</div>', unsafe_allow_html=True)
-        engine_html = "<div style='margin-bottom: 2rem;'>\n"
-        start_idx = max(0, current_tier_idx - 3)
-        for i in range(start_idx, current_tier_idx):
-            t = TIERS[i]
-            engine_html += f"<div class='tier-item completed'><div class='tier-emoji'>{t['emoji']}</div><div class='tier-details'><div class='tier-name'>{t['name']}</div><div class='tier-req'>UNLOCKED: {t['days']} DAYS</div></div><div style='color:var(--c-emerald); font-weight:800;'>✓</div></div>\n"
-        t_curr = TIERS[current_tier_idx]
-        if current_tier_idx < len(TIERS) - 1:
-            t_next = TIERS[current_tier_idx + 1]
-            progress = ((days_elapsed - t_curr['days']) / (t_next['days'] - t_curr['days'])) * 100
-            engine_html += f"<div class='tier-item current'><div class='tier-emoji'>{t_curr['emoji']}</div><div class='tier-details'><div style='display:flex; justify-content:space-between; align-items:flex-end;'><div class='tier-name' style='color:var(--c-emerald);'>{t_curr['name']}</div><div style='font-size:0.6rem; font-weight:700;'>{days_elapsed} / {t_next['days']} D</div></div><div class='prog-tk'><div class='prog-fill' style='width:{progress}%;'></div></div></div></div>\n"
-        else:
-            engine_html += f"<div class='tier-item current'><div class='tier-emoji'>{t_curr['emoji']}</div><div class='tier-details'><div class='tier-name' style='color:var(--c-emerald);'>{t_curr['name']}</div><div class='tier-req'>MAXIMUM TIER REACHED</div></div></div>\n"
-        end_idx = min(len(TIERS), current_tier_idx + 3)
-        for i in range(current_tier_idx + 1, end_idx):
-            t = TIERS[i]
-            engine_html += f"<div class='tier-item locked'><div class='tier-emoji'>🔒</div><div class='tier-details'><div class='tier-name'>{t['name']}</div><div class='tier-req'>REQUIRES: {t['days']} DAYS</div></div></div>\n"
-        engine_html += "</div>"
-        st.markdown(engine_html, unsafe_allow_html=True)
-
-elif app_view == "Data":
-    header_placeholder.empty()
-    st.markdown('<div class="s-head" style="margin-top:0;">RECORD HISTORY</div>', unsafe_allow_html=True)
-    
-    seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
-    
-    for i in range(len(df)-1, max(-1, len(df)-21), -1):
-        row = df.iloc[i]
-        c1, c2 = st.columns([5, 1])
-        with c1:
-            st.markdown(f"""
-            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--text-muted);">{row['Date'].strftime('%d %b %Y')}</div>
-                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; color:var(--text-main); font-weight:700;">
-                    {row['Weight (kg)']}KG <span style="color:var(--border-strong); margin: 0 4px;">|</span> {row['Muscle Mass (kg)']}MM <span style="color:var(--border-strong); margin: 0 4px;">|</span> {row['Body Fat (%)']}%
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        with c2:
-            if pd.Timestamp(row['Date']) >= seven_days_ago:
-                if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    new_df = df.drop(index=i).reset_index(drop=True)
-                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
-                    st.session_state['active_df'] = new_df
-                    load_data.clear()
-                    system_alert("RECORD PURGED", "err")
-                    st.rerun()
-
-elif app_view == "Settings":
-    header_placeholder.empty()
-
-    st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:1rem; font-weight:700; color:var(--text-main); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
-
-    with st.expander("ℹ️ Active Protocol Parameters"):
-        w_t, w_min, w_max = ideal_rates['Weight (kg)']
-        m_t, m_min = ideal_rates['Muscle Mass (kg)'][:2]
-        bf_t, bf_min, bf_max = ideal_rates['Body Fat (%)']
-        
-        st.markdown(f"""
-        <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.6; font-family: 'JetBrains Mono', monospace;">
-        <b>WEIGHT:</b> Target {w_t:+.2f} kg/mo | Range: [{w_min:+.2f}, {w_max:+.2f}]<br>
-        <b>MUSCLE:</b> Target {m_t:+.2f} kg/mo | Minimum: {m_min:+.2f}<br>
-        <b>FAT:</b> Target {bf_t:+.2f} %/mo | Range: [{bf_min:+.2f}, {bf_max:+.2f}]<br>
-        <br><span style="font-family:'Inter', sans-serif;"><i>Note: Base parameters are hardcoded in the Python core. Change protocol using the main dropdown.</i></span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
-    
-    new_theme = st.selectbox("App Theme Preference", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
-    if new_theme != st.session_state['theme_pref']:
-        st.session_state['theme_pref'] = new_theme
-        st.query_params.theme = new_theme
-        st.rerun()
-
-    st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state.get('enable_quotes', True))
-    st.session_state['enable_achievements'] = st.toggle("Enable Achievements System", value=st.session_state.get('enable_achievements', True))
-
-    if st.session_state.get('enable_quotes'):
-        with st.expander("Manage Custom Quotes"):
-            for q in st.session_state['all_quotes']:
-                st.markdown(f"<div style='font-size:0.7rem; color:var(--text-main); margin-bottom:5px;'>• {q}</div>", unsafe_allow_html=True)
-            new_quote = st.text_input("Add New Quote", placeholder="Enter quote here...")
-            if st.button("Add to Rotation"):
-                if new_quote and new_quote not in st.session_state['all_quotes']:
-                    st.session_state['all_quotes'].append(new_quote)
-                    system_alert("QUOTE INJECTED")
-                    st.rerun()
-
-    st.markdown('<div class="settings-lbl" style="margin-top:2.5rem;">Data Analysis Limits</div>', unsafe_allow_html=True)
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        new_analysis_start = st.date_input("Trend Analysis Start", value=st.session_state['analysis_start_date'], help="The Math Engine will only calculate your pace using data AFTER this date.")
-    with c2:
-        new_target_end = st.date_input("Target End Date", value=st.session_state['target_end_date'], help="The date your target trajectory is aiming for.")
-    
-    if st.button("SAVE DATES & RE-CALIBRATE"):
-        st.session_state['analysis_start_date'] = new_analysis_start
-        st.session_state['target_end_date'] = new_target_end
-        st.query_params.start = new_analysis_start.strftime('%Y-%m-%d')
-        st.query_params.end = new_target_end.strftime('%Y-%m-%d')
-        system_alert("ENGINE RE-CALIBRATED")
-        st.rerun()
-
-    if st.session_state.get('is_admin'):
-        st.markdown('<div class="settings-lbl" style="margin-top:2.5rem; color:var(--c-rose);">Admin Control</div>', unsafe_allow_html=True)
-        if st.button("LOGOUT / SWITCH PROFILE", use_container_width=True):
-            st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
-            st.session_state['auth_status'] = False
-            st.session_state['current_user'] = None
-            st.session_state['sheet_url'] = ""
-            if 'active_df' in st.session_state:
-                del st.session_state['active_df']
-            st.query_params.clear()
-            st.cache_data.clear()
-            st.rerun()
+        st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['
