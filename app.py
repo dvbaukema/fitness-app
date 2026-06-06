@@ -16,15 +16,15 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS",
+    page_title="METRICS | Alpha 1",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
 def system_alert(message, kind="ok"):
-    bg = "#10B981" if kind == "ok" else "#EF4444"
+    bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
     ph = st.empty()
-    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:#FFFFFF; padding:14px 36px; border-radius:100px; font-weight:800; font-family:\"DM Sans\", sans-serif; z-index:99999; box-shadow: 0 8px 32px rgba(0,0,0,0.25); text-transform:uppercase; letter-spacing:2px; font-size: 0.78rem;'>{message}</div>"
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
     ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
@@ -142,6 +142,21 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
     except HttpError:
         return False
 
+def delete_row_from_gsheet(sheet_url, row_index_to_delete):
+    service = get_google_sheets_service()
+    sheet_id = extract_sheet_id(sheet_url)
+    if not service or not sheet_id: return False
+    try:
+        sheet_row_index = row_index_to_delete + 1 
+        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
+        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
+        body = {'requests': requests}
+        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
+        return True
+    except HttpError:
+        return False
+
 def overwrite_gsheet(sheet_url, df):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
@@ -174,12 +189,12 @@ def get_display_name(user_key): return KEY_TO_LABEL.get(user_key, "Unknown User"
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
     "Intensity > Volume.",
-    "No man has the right to be an amateur in the matter of physical training. - Socrates",
-    "Discipline equals freedom. - Jocko Willink",
+    "No man has the right to be an amateur in the matter of physical training. — Socrates",
+    "Discipline equals freedom. — Jocko Willink",
     "It's not about perfect. It's about effort.",
-    "The iron never lies. - Henry Rollins",
-    "We are what we repeatedly do. Excellence, then, is not an act, but a habit. - Aristotle",
-    "There is no reason to be alive and not be strong. - Socrates",
+    "The iron never lies. — Henry Rollins",
+    "We are what we repeatedly do. Excellence, then, is not an act, but a habit. — Aristotle",
+    "There is no reason to be alive and not be strong. — Socrates",
     "If you want something you've never had, you must be willing to do something you've never done.",
     "Strength does not come from winning. Your struggles develop your strengths.",
     "Nothing truly great ever came from a comfort zone."
@@ -352,75 +367,51 @@ css = theme_block + """
 }
 
 /* ══════════════════════════════
-   NAVIGATION — SPOTIFY STYLE ISOLATED TABS
+   NAVIGATION — FLOATING RADIO HACK
 ══════════════════════════════ */
-div[data-testid="stSegmentedControl"] {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  margin-bottom: 2rem !important;
-  display: flex !important;
-  justify-content: center !important;
-  padding: 10px 0 !important;
+div[role="radiogroup"] {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 2.5rem;
+    margin-top: -0.5rem;
+    background: transparent !important;
 }
+div[role="radiogroup"] > label {
+    background: var(--surface) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: 100px !important;
+    padding: 8px 18px !important;
+    margin: 0 !important;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+}
+div[role="radiogroup"] > label:hover {
+    border-color: var(--text-muted) !important;
+    transform: translateY(-1px);
+}
+div[role="radiogroup"] > label[data-checked="true"] {
+    background: var(--nav-pill) !important;
+    border-color: var(--nav-pill) !important;
+    box-shadow: var(--shadow-md);
+}
+div[role="radiogroup"] > label div {
+    color: var(--text-muted) !important;
+    font-weight: 600 !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.5px !important;
+}
+div[role="radiogroup"] > label[data-checked="true"] div {
+    color: var(--nav-pill-text) !important;
+    font-weight: 800 !important;
+}
+div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
+div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 
-div[data-testid="stSegmentedControl"]::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--nav-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
-  z-index: -1;
-}
-
-div[data-testid="stSegmentedControl"] > div {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  display: flex !important;
-  gap: 12px !important;
-  padding: 4px !important;
-}
-
-/* Aggressively target and hide the native Streamlit sliding background div */
-div[data-testid="stSegmentedControl"] > div > div:first-child,
-div[data-testid="stSegmentedControl"] > div > div:not([data-testid="stSegmentedControlSegment"]) {
-  display: none !important;
-  opacity: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] {
-  background: var(--surface) !important;
-  border-radius: 100px !important;
-  border: 1px solid var(--border-strong) !important;
-  padding: 6px 14px !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  position: relative !important;
-}
-
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
-  background: var(--nav-pill) !important;
-  border: 1px solid var(--nav-pill) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
-}
-
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] p {
-  color: var(--nav-text) !important;
-  font-weight: 500 !important;
-  font-size: 0.78rem !important;
-  letter-spacing: 0.3px !important;
-  font-family: 'DM Sans', sans-serif !important;
-  transition: color 0.2s ease !important;
-}
-
-div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] p {
-  color: var(--nav-pill-text) !important;
-  font-weight: 700 !important;
-}
+/* Hide regular segmented controls if they render */
+div[data-testid="stSegmentedControl"] { display: none !important; }
 
 /* ══════════════════════════════
    SECTION HEADERS
@@ -719,7 +710,6 @@ div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][
   padding: 14px 16px;
   margin-bottom: 8px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.15s ease;
@@ -1011,7 +1001,7 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     for i, (user_key, url) in enumerate(USER_DATA.items()):
         display_name = get_display_name(user_key)
         with cols[i]:
-            if st.button(display_name, key=f"admin_{user_key}", use_container_width=True):
+            if st.button(display_name.upper(), key=f"admin_{user_key}", use_container_width=True):
                 st.session_state['auth_status'] = True
                 st.session_state['current_user'] = user_key
                 st.session_state['sheet_url'] = url
@@ -1234,7 +1224,9 @@ active_goal = st.session_state.get('current_goal', 'Lean Bulk')
 ideal_rates = GOAL_PROFILES.get(active_goal, GOAL_PROFILES['Lean Bulk'])
 
 header_placeholder = st.empty()
-app_view = st.segmented_control("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"], default="Entry", label_visibility="collapsed")
+
+# ── STREAMLIT RADIO HACK FOR FLOATING TABS ──
+app_view = st.radio("Nav", ["Entry", "Trends", "Analysis", "Data", "Settings"], horizontal=True, label_visibility="collapsed")
 
 # ══════════════════════════════════════════════════════════════
 # ENTRY TAB
@@ -1244,7 +1236,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">Metrics</div>
-            <div class="tagline">{get_display_name(st.session_state['current_user'])} · Alpha 2</div>
+            <div class="tagline">{get_display_name(st.session_state['current_user'])} · Alpha 1</div>
         </div>
         <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
     </div>
@@ -1351,7 +1343,7 @@ elif app_view == "Trends":
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} · <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
+            proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
@@ -1617,6 +1609,15 @@ elif app_view == "Data":
     
     seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
+    st.markdown("""
+    <div style='display: grid; grid-template-columns: 2.2fr 1.2fr 1.2fr 1.2fr; gap: 8px; padding: 0 16px; margin-bottom: 10px; font-family:"DM Mono", monospace; font-size:0.6rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing: 1.5px; font-weight: 600;'>
+        <div>Date</div>
+        <div style='text-align:right;'>Weight</div>
+        <div style='text-align:right;'>Muscle</div>
+        <div style='text-align:right;'>Fat</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     for i in range(len(df)-1, max(-1, len(df)-21), -1):
         row = df.iloc[i]
         
@@ -1624,24 +1625,29 @@ elif app_view == "Data":
         if i > 0:
             prev_row = df.iloc[i-1]
             delta_w = row['Weight (kg)'] - prev_row['Weight (kg)']
-            dw_color = "var(--c-rose)" if delta_w > 0 else "var(--c-emerald)" if delta_w < 0 else "var(--text-muted)"
-            if "Bulk" in st.session_state['current_goal']: dw_color = "var(--c-emerald)" if delta_w > 0 else "var(--c-rose)" if delta_w < 0 else "var(--text-muted)"
-            delta_html = f"<span style='color:{dw_color}; font-size:0.65rem; margin-left:4px;'>({sgn(delta_w)}{delta_w:.1f})</span>"
+            delta_m = row['Muscle Mass (kg)'] - prev_row['Muscle Mass (kg)']
+            delta_bf = row['Body Fat (%)'] - prev_row['Body Fat (%)']
+            
+            dw_color = "var(--c-emerald)" if ("Cut" in active_goal and delta_w <= 0) or ("Bulk" in active_goal and delta_w >= 0) else "var(--c-rose)"
+            dm_color = "var(--c-emerald)" if delta_m >= 0 else "var(--c-rose)"
+            dbf_color = "var(--c-emerald)" if delta_bf <= 0 else "var(--c-rose)"
+            
+            delta_html_w = f"<div style='color:{dw_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_w)}{delta_w:.1f}</div>"
+            delta_html_m = f"<div style='color:{dm_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_m)}{delta_m:.1f}</div>"
+            delta_html_bf = f"<div style='color:{dbf_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_bf)}{delta_bf:.1f}</div>"
         else:
-            delta_html = ""
+            delta_html_w, delta_html_m, delta_html_bf = "", "", ""
 
         can_delete = pd.Timestamp(row['Date']) >= seven_days_ago
-        c1, c2 = st.columns([6, 1])
+        c1, c2 = st.columns([5.5, 0.8])
         with c1:
             st.markdown(f"""
             <div class="hist-row" style="padding-right:0;">
-                <div class="hist-date" style="flex:1;">{row['Date'].strftime('%d %b %Y')}</div>
-                <div class="hist-vals" style="flex:2; text-align:right;">
-                    {row['Weight (kg)']}{delta_html}
-                    <span class="hist-sep">·</span>
-                    {row['Muscle Mass (kg)']}
-                    <span class="hist-sep">·</span>
-                    {row['Body Fat (%)']}%
+                <div style="display: grid; grid-template-columns: 2.2fr 1.2fr 1.2fr 1.2fr; gap: 8px; align-items: center; width: 100%;">
+                    <div class="hist-date">{row['Date'].strftime('%d %b %Y')}</div>
+                    <div class="hist-vals" style="text-align:right;">{row['Weight (kg)']:.1f}{delta_html_w}</div>
+                    <div class="hist-vals" style="text-align:right;">{row['Muscle Mass (kg)']:.1f}{delta_html_m}</div>
+                    <div class="hist-vals" style="text-align:right;">{row['Body Fat (%)']:.1f}%{delta_html_bf}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
