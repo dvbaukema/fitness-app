@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Alpha 2",
+    page_title="METRICS",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -142,21 +142,6 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
     except HttpError:
         return False
 
-def delete_row_from_gsheet(sheet_url, row_index_to_delete):
-    service = get_google_sheets_service()
-    sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: return False
-    try:
-        sheet_row_index = row_index_to_delete + 1 
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
-        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
-        body = {'requests': requests}
-        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
-        return True
-    except HttpError:
-        return False
-
 def overwrite_gsheet(sheet_url, df):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
@@ -189,12 +174,12 @@ def get_display_name(user_key): return KEY_TO_LABEL.get(user_key, "Unknown User"
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
     "Intensity > Volume.",
-    "No man has the right to be an amateur in the matter of physical training. — Socrates",
-    "Discipline equals freedom. — Jocko Willink",
+    "No man has the right to be an amateur in the matter of physical training. - Socrates",
+    "Discipline equals freedom. - Jocko Willink",
     "It's not about perfect. It's about effort.",
-    "The iron never lies. — Henry Rollins",
-    "We are what we repeatedly do. Excellence, then, is not an act, but a habit. — Aristotle",
-    "There is no reason to be alive and not be strong. — Socrates",
+    "The iron never lies. - Henry Rollins",
+    "We are what we repeatedly do. Excellence, then, is not an act, but a habit. - Aristotle",
+    "There is no reason to be alive and not be strong. - Socrates",
     "If you want something you've never had, you must be willing to do something you've never done.",
     "Strength does not come from winning. Your struggles develop your strengths.",
     "Nothing truly great ever came from a comfort zone."
@@ -367,7 +352,7 @@ css = theme_block + """
 }
 
 /* ══════════════════════════════
-   NAVIGATION — SPOTIFY STYLE
+   NAVIGATION — SPOTIFY STYLE ISOLATED TABS
 ══════════════════════════════ */
 div[data-testid="stSegmentedControl"] {
   position: sticky;
@@ -395,22 +380,23 @@ div[data-testid="stSegmentedControl"] > div {
   border: none !important;
   box-shadow: none !important;
   display: flex !important;
-  gap: 4px !important;
+  gap: 12px !important;
   padding: 4px !important;
-  background: var(--surface) !important;
-  border-radius: 100px !important;
-  border: 1px solid var(--border-strong) !important;
-  box-shadow: var(--shadow-md) !important;
 }
 
+/* Aggressively target and hide the native Streamlit sliding background div */
+div[data-testid="stSegmentedControl"] > div > div:first-child,
 div[data-testid="stSegmentedControl"] > div > div:not([data-testid="stSegmentedControlSegment"]) {
   display: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] {
-  background: transparent !important;
+  background: var(--surface) !important;
   border-radius: 100px !important;
-  border: none !important;
+  border: 1px solid var(--border-strong) !important;
   padding: 6px 14px !important;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   position: relative !important;
@@ -418,6 +404,7 @@ div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] 
 
 div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
   background: var(--nav-pill) !important;
+  border: 1px solid var(--nav-pill) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
 }
 
@@ -756,6 +743,22 @@ div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][
   margin: 0 6px;
   font-weight: 300;
 }
+.del-btn button {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-subtle) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+}
+.del-btn button:hover {
+    color: var(--c-rose) !important;
+}
 
 /* ══════════════════════════════
    ALERT BANNERS
@@ -814,7 +817,7 @@ div[data-testid="stSlider"] div[role="slider"] {
 ══════════════════════════════ */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div {
-  background: var(--surface) !important;
+  background: var(--input-bg) !important;
   border: 1px solid var(--border-strong) !important;
   border-radius: 12px !important;
   color: var(--input-text) !important;
@@ -915,7 +918,7 @@ div[data-testid="stToggle"] label p {
   font-size: 0.85rem !important;
 }
 
-/* Expander */
+/* Expander Force Light Mode Visibility */
 div[data-testid="stExpander"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
@@ -926,6 +929,9 @@ div[data-testid="stExpander"] summary p {
   color: var(--text-main) !important;
   font-size: 0.82rem !important;
   font-weight: 600 !important;
+}
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
+  color: var(--text-main) !important;
 }
 
 /* Spinner steppers hidden */
@@ -1613,16 +1619,27 @@ elif app_view == "Data":
     
     for i in range(len(df)-1, max(-1, len(df)-21), -1):
         row = df.iloc[i]
+        
+        # Calculate Delta
+        if i > 0:
+            prev_row = df.iloc[i-1]
+            delta_w = row['Weight (kg)'] - prev_row['Weight (kg)']
+            dw_color = "var(--c-rose)" if delta_w > 0 else "var(--c-emerald)" if delta_w < 0 else "var(--text-muted)"
+            if "Bulk" in st.session_state['current_goal']: dw_color = "var(--c-emerald)" if delta_w > 0 else "var(--c-rose)" if delta_w < 0 else "var(--text-muted)"
+            delta_html = f"<span style='color:{dw_color}; font-size:0.65rem; margin-left:4px;'>({sgn(delta_w)}{delta_w:.1f})</span>"
+        else:
+            delta_html = ""
+
         can_delete = pd.Timestamp(row['Date']) >= seven_days_ago
-        c1, c2 = st.columns([5, 1])
+        c1, c2 = st.columns([6, 1])
         with c1:
             st.markdown(f"""
-            <div class="hist-row">
-                <div class="hist-date">{row['Date'].strftime('%d %b %Y')}</div>
-                <div class="hist-vals">
-                    {row['Weight (kg)']}kg
+            <div class="hist-row" style="padding-right:0;">
+                <div class="hist-date" style="flex:1;">{row['Date'].strftime('%d %b %Y')}</div>
+                <div class="hist-vals" style="flex:2; text-align:right;">
+                    {row['Weight (kg)']}{delta_html}
                     <span class="hist-sep">·</span>
-                    {row['Muscle Mass (kg)']}mm
+                    {row['Muscle Mass (kg)']}
                     <span class="hist-sep">·</span>
                     {row['Body Fat (%)']}%
                 </div>
@@ -1630,13 +1647,15 @@ elif app_view == "Data":
             """, unsafe_allow_html=True)
         with c2:
             if can_delete:
-                if st.button("🗑️", key=f"del_{i}", help="Delete"):
+                st.markdown("<div class='del-btn' style='height:100%; display:flex; align-items:center; justify-content:center; padding-top:14px;'>", unsafe_allow_html=True)
+                if st.button("Del", key=f"del_{i}"):
                     new_df = df.drop(index=i).reset_index(drop=True)
                     overwrite_gsheet(st.session_state['sheet_url'], new_df)
                     st.session_state['active_df'] = new_df
                     load_data.clear()
                     system_alert("Deleted", "err")
                     st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
 # SETTINGS TAB
