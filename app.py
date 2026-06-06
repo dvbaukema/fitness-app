@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS",
+    page_title="METRICS | Alpha 1",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -64,6 +64,10 @@ st.markdown("""
     const savedEnd = localStorage.getItem('metrics_end');
     if (savedEnd && !urlParams.has('end')) { urlParams.set('end', savedEnd); redirect = true; } 
     else if (urlParams.has('end')) { localStorage.setItem('metrics_end', urlParams.get('end')); }
+
+    const savedTheme = localStorage.getItem('metrics_theme');
+    if (savedTheme && !urlParams.has('theme')) { urlParams.set('theme', savedTheme); redirect = true; } 
+    else if (urlParams.has('theme')) { localStorage.setItem('metrics_theme', urlParams.get('theme')); }
 
     if (redirect) {
         const newUrl = window.location.origin + window.location.pathname + '?' + urlParams.toString();
@@ -195,6 +199,8 @@ if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] 
 if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
 if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
+if 'theme_pref' not in st.session_state: st.session_state['theme_pref'] = st.query_params.get("theme", "System")
+
 if 'analysis_start_date' not in st.session_state:
     default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
@@ -203,42 +209,32 @@ if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
-# CSS THEME (RETRO MODERN & SPOTIFY TABS)
+# CSS THEMES (RETRO WARM & SPOTIFY TABS)
 # ══════════════════════════════════════════════════════════════
-css = """
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
-
-:root { /* Light Mode (Retro Cream/Paper) */
-    --bg-primary: #F6F4F0;
-    --text-main: #2A2A2A;
-    --text-muted: rgba(42, 42, 42, 0.65);
-    --text-subtle: rgba(42, 42, 42, 0.45);
-    --surface: #FFFFFF;
-    --surface-active: #EAE6DF;
-    --border: #E0DBD2;
-    --border-strong: #C4BEB2;
-    --c-emerald: #2A9D8F; /* Retro Teal */
-    --c-amber: #E9C46A;   /* Retro Yellow */
-    --c-rose: #E76F51;    /* Retro Coral */
-    --c-blue: #028090;    /* Deep Ocean Blue */
-}
-
-@media (prefers-color-scheme: dark) {
-    :root { /* Dark Mode (Retro Synth/OLED) */
-        --bg-primary: #121212;
-        --text-main: #FDFDFD;
-        --text-muted: rgba(253, 253, 253, 0.65);
-        --text-subtle: rgba(253, 253, 253, 0.4);
-        --surface: #1E1E1E;
-        --surface-active: #2C2C2C;
-        --border: #2A2A2A;
-        --border-strong: #444444;
-        --c-emerald: #00F5D4; /* Neon Seafoam */
-        --c-amber: #FEE440;   /* Neon Yellow */
-        --c-rose: #F15BB5;    /* Neon Pink */
-        --c-blue: #00BBF9;    /* Neon Cyan */
+css_light = """
+    :root {
+        --bg-primary: #F6F4F0; --text-main: #2A2A2A; --text-muted: rgba(42, 42, 42, 0.65); --text-subtle: rgba(42, 42, 42, 0.45);
+        --surface: #FFFFFF; --surface-active: #EAE6DF; --border: #E0DBD2; --border-strong: #C4BEB2;
+        --c-emerald: #FFB33F; --c-amber: #FF4400; --c-rose: #C00707; --c-blue: #028090;
     }
-}
+"""
+css_dark = """
+    :root {
+        --bg-primary: #121212; --text-main: #FDFDFD; --text-muted: rgba(253, 253, 253, 0.65); --text-subtle: rgba(253, 253, 253, 0.4);
+        --surface: #1E1E1E; --surface-active: #2C2C2C; --border: #2A2A2A; --border-strong: #444444;
+        --c-emerald: #FFB33F; --c-amber: #FF4400; --c-rose: #C00707; --c-blue: #00BBF9;
+    }
+"""
+
+if st.session_state['theme_pref'] == "Dark":
+    theme_vars = css_dark
+elif st.session_state['theme_pref'] == "Light":
+    theme_vars = css_light
+else:
+    theme_vars = css_light + "\n@media (prefers-color-scheme: dark) {\n" + css_dark + "\n}"
+
+css = theme_vars + """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 .stApp { background: var(--bg-primary) !important; font-family: 'Inter', sans-serif !important; }
 .block-container { padding-top: 1rem !important; padding-bottom: 4rem !important; max-width: 600px !important; }
@@ -250,40 +246,34 @@ css = """
 .app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
 .wordmark { font-family: 'Inter', sans-serif; font-size: 2.2rem; font-weight: 800; color: var(--text-main); letter-spacing: -1px; line-height: 1; }
 .tagline { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-subtle); margin-top: 4px; }
-.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(42, 157, 143, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
+.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(255, 179, 63, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
 
 .quote-box { text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 1.5rem;}
 .quote-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; color: var(--text-main); font-style: italic; font-weight: 500; letter-spacing: 0.2px;}
 
 /* ── SPOTIFY STYLE ISOLATED TABS ── */
 div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; }
+div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
 div[data-testid="stSegmentedControl"] > div {
     background: transparent !important;
     border: none !important;
     gap: 12px !important;
     padding: 0 !important;
+    display: flex !important;
 }
-div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
 div[data-testid="stSegmentedControl"] label {
     background: var(--surface) !important;
     border: 1px solid var(--border) !important;
-    border-radius: 20px !important;
-    padding: 6px 14px !important;
+    border-radius: 50px !important;
+    padding: 10px 16px !important;
     margin: 0 !important;
+    cursor: pointer !important;
+    flex: 1 !important;
+    text-align: center !important;
 }
-div[data-testid="stSegmentedControl"] label div {
-    color: var(--text-muted) !important;
-    font-weight: 600 !important;
-    font-size: 0.75rem !important;
-}
-div[data-testid="stSegmentedControl"] label[aria-checked="true"] {
-    background: var(--text-main) !important;
-    border-color: var(--text-main) !important;
-}
-div[data-testid="stSegmentedControl"] label[aria-checked="true"] div {
-    color: var(--bg-primary) !important;
-    font-weight: 800 !important;
-}
+div[data-testid="stSegmentedControl"] label div { color: var(--text-muted) !important; font-weight: 700 !important; font-size: 0.75rem !important; }
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] { background: var(--text-main) !important; border-color: var(--text-main) !important; }
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] div { color: var(--bg-primary) !important; font-weight: 800 !important; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
@@ -310,9 +300,9 @@ div[data-testid="stSegmentedControl"] label[aria-checked="true"] div {
 .tj-st { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-top:10px;}
 
 .tier-item { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); }
-.tier-item.completed { background: rgba(42, 157, 143, 0.05); border: 1px solid rgba(42, 157, 143, 0.3); }
+.tier-item.completed { background: rgba(255, 179, 63, 0.05); border: 1px solid rgba(255, 179, 63, 0.3); }
 .tier-item.completed .tier-name { color: var(--c-emerald); }
-.tier-item.current { background: rgba(42, 157, 143, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(42, 157, 143, 0.15); }
+.tier-item.current { background: rgba(255, 179, 63, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(255, 179, 63, 0.15); }
 .tier-item.locked { opacity: 0.3; }
 .tier-emoji { font-size: 1.5rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 8px; }
 .tier-details { flex-grow: 1; }
@@ -323,9 +313,8 @@ div[data-testid="stSegmentedControl"] label[aria-checked="true"] div {
 
 div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
-div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(42, 157, 143, 0.5) !important; z-index: 2 !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: var(--bg-primary) !important; border: 4px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(255, 179, 63, 0.4) !important; z-index: 2 !important; }
 
-/* Selector Controls (Centering Fix) */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -455,7 +444,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
     if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
 
-    # Perfect CSS Grid layout for overlapping text issue
+    # CSS Grid logic for perfectly stable text
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
         bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span></div>"
@@ -517,7 +506,6 @@ if has_enough_weight_data:
     X_w = X_w_raw.reshape(-1, 1)
     y_w = df_w['Weight (kg)'].values
     
-    # Regression & Confidence Intervals
     res_w = stats.linregress(X_w_raw, y_w)
     slope_w = res_w.slope
     stderr_w = res_w.stderr
@@ -530,7 +518,6 @@ if has_enough_weight_data:
         future_days_w  = np.array([[start_day_w + i] for i in range(0, days_to_end_w + 10)])
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
         
-        # Calculate Error Cone
         pred_y_w = res_w.intercept + slope_w * future_days_w.flatten()
         margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96 # 95% CI
         
@@ -539,7 +526,7 @@ if has_enough_weight_data:
             'preds': pred_y_w,
             'upper': pred_y_w + margin_of_error_w,
             'lower': pred_y_w - margin_of_error_w,
-            'final_error': margin_of_error_w[-10] # Error exactly on Target Date
+            'final_error': margin_of_error_w[-10] 
         }
 
 if has_enough_comp_data:
@@ -564,7 +551,7 @@ if has_enough_comp_data:
             monthly_trends[m] = slope_c * 30
             
             pred_y_c = res_c.intercept + slope_c * future_days_c.flatten()
-            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96 # 95% CI
+            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96
             
             traj_data[m] = {
                 'dates': future_dates_c, 
@@ -590,7 +577,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V39 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine Alpha 1 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -621,7 +608,7 @@ if app_view == "Entry":
         elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
             st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(42, 157, 143, 0.1); border:1px solid rgba(42, 157, 143, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(255, 179, 63, 0.1); border:1px solid rgba(255, 179, 63, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
 
     delta_w = last['Weight (kg)'] - prev['Weight (kg)']
     delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
@@ -675,7 +662,7 @@ elif app_view == "Trends":
         st.stop()
         
     if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(255, 68, 0, 0.1); border:1px solid rgba(255, 68, 0, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='var(--text-muted)')
     for metric in METRICS:
@@ -688,11 +675,12 @@ elif app_view == "Trends":
         target = ideal_rates[metric][0]
         c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
         
-        # Pull the final calculated value & standard error
         if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10] # Target date
+            final_pred = traj_data[metric]['preds'][-10]
             final_error = traj_data[metric]['final_error']
-            proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{final_pred:.1f} {unit}</span> <span style='color:var(--text-muted);'>±{final_error:.1f}</span></div>"
+            lower_proj = final_pred - final_error
+            upper_proj = final_pred + final_error
+            proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.7rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
@@ -700,7 +688,7 @@ elif app_view == "Trends":
         <div class="chart-blk">
             <div class="chart-meta" style="align-items: flex-start;">
                 <div>
-                    <div style="font-size:0.75rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:700; color:var(--c-blue); margin-left:8px;">{last_val:.1f} <span style="font-size:0.6rem; color:var(--text-muted);">{unit}</span></span></div>
+                    <div style="font-size:1.1rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:800; color:var(--c-blue); margin-left:8px; font-size:1.3rem;">{last_val:.1f} <span style="font-size:0.8rem; color:var(--text-muted);">{unit}</span></span></div>
                     {proj_html}
                 </div>
                 <div style="text-align: right;">
@@ -712,19 +700,15 @@ elif app_view == "Trends":
         
         fig = go.Figure()
         
-        # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
         fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
         
-        # Active Data (After Start Epoch) - Solid Blue (Retro Teal)
         spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#028090', width=2.5), marker=dict(size=5, color='#028090'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='var(--c-blue)', width=2.5), marker=dict(size=5, color='var(--c-blue)'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
-        # Bold Start Epoch Line
         epoch_date = spec_recent['Date'].min()
         fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="var(--border-strong)", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="var(--text-muted)")
         
-        # Target Math
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
         
@@ -734,7 +718,7 @@ elif app_view == "Trends":
         elif metric == 'Muscle Mass (kg)':
             start_x = current_date
             start_y = spec_recent.iloc[-1][metric]
-        else: # Body Fat
+        else:
             start_x = current_date
             start_y = spec_recent[metric].mean()
             
@@ -742,27 +726,20 @@ elif app_view == "Trends":
         
         if days_span > 0:
             target_val_at_end = start_y + (daily_rate * days_span)
-            
-            # End Target Line
             fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="var(--c-emerald)", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="var(--c-emerald)")
-            # End Target Marker
-            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#2A9D8F', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#2A9D8F", size=10, family="JetBrains Mono"), hoverinfo='skip'))
-            # Target Path
+            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#FFB33F', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#FFB33F", size=10, family="JetBrains Mono"), hoverinfo='skip'))
             fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
-        # Regression Trajectory Path w/ Error Cone (Confidence Interval)
         if 'dates' in traj_data.get(metric, {}):
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
             
-            # Fill Area for Confidence Interval
             fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
             
-            # Regression Line (Theme matched hex_col)
-            if c_txt == 'c-ok': line_c = '#2A9D8F'
-            elif c_txt == 'c-wrn': line_c = '#E9C46A'
-            else: line_c = '#E76F51'
+            if c_txt == 'c-ok': line_c = '#FFB33F'
+            elif c_txt == 'c-wrn': line_c = '#FF4400'
+            else: line_c = '#C00707'
             fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=line_c, width=2, dash='dash'), hoverinfo='skip'))
         
         fig.update_layout(
@@ -770,7 +747,7 @@ elif app_view == "Trends":
             margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
             legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='var(--text-muted)')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -782,7 +759,7 @@ elif app_view == "Analysis":
         st.stop()
 
     if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(255, 68, 0, 0.1); border:1px solid rgba(255, 68, 0, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     last = df.iloc[-1]
     w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
@@ -827,7 +804,7 @@ elif app_view == "Analysis":
     if has_enough_comp_data:
         st.markdown(
             traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_rates, "kg/mo", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "%/mo", mmt, bft),
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_rates, "kg/mo", mmt, bft),
             unsafe_allow_html=True
         )
 
@@ -835,7 +812,6 @@ elif app_view == "Analysis":
     w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
     diags = []
     
-    # ── SMART RECOMPOSITION DIAGNOSTICS ──
     is_muscle_driven = (wt > w_upper) and has_enough_comp_data and (mmt >= (wt * 0.4)) and (bft <= 0.2)
     is_fat_loss_driven = (wt < w_lower) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
 
@@ -963,6 +939,13 @@ elif app_view == "Settings":
         """, unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
+    
+    new_theme = st.selectbox("App Theme", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
+    if new_theme != st.session_state['theme_pref']:
+        st.session_state['theme_pref'] = new_theme
+        st.query_params.theme = new_theme
+        st.rerun()
+
     st.session_state['enable_quotes'] = st.toggle("Enable Motivational Quotes", value=st.session_state.get('enable_quotes', True))
     st.session_state['enable_achievements'] = st.toggle("Enable Achievements System", value=st.session_state.get('enable_achievements', True))
 
