@@ -24,7 +24,7 @@ st.set_page_config(
 def system_alert(message, kind="ok"):
     bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
     ph = st.empty()
-    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:#09090B; padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
     ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
@@ -203,31 +203,40 @@ if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
-# OBSIDIAN THEME CSS (UPDATED FOR V38 - SPOTIFY TABS & OLED BLACK)
+# CSS THEME (RETRO MODERN & SPOTIFY TABS)
 # ══════════════════════════════════════════════════════════════
 css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
-:root {
-    --bg-primary: #000000;      /* OLED Black */
-    --text-main: #FFFFFF; 
-    --text-muted: #A7A7A7;      /* Spotify Gray */
-    --text-subtle: #737373;
-    --surface: #121212;         /* Dark surface */
-    --surface-active: #282828;  /* Active hover surface */
-    --border: #2A2A2A;          /* Crisp border */
-    --border-strong: #3E3E3E;
-    --c-emerald: #10B981; 
-    --c-amber: #F59E0B; 
-    --c-rose: #EF4444; 
-    --c-blue: #3B82F6;
+:root { /* Light Mode (Retro Cream/Paper) */
+    --bg-primary: #F6F4F0;
+    --text-main: #2A2A2A;
+    --text-muted: rgba(42, 42, 42, 0.65);
+    --text-subtle: rgba(42, 42, 42, 0.45);
+    --surface: #FFFFFF;
+    --surface-active: #EAE6DF;
+    --border: #E0DBD2;
+    --border-strong: #C4BEB2;
+    --c-emerald: #2A9D8F; /* Retro Teal */
+    --c-amber: #E9C46A;   /* Retro Yellow */
+    --c-rose: #E76F51;    /* Retro Coral */
+    --c-blue: #028090;    /* Deep Ocean Blue */
 }
 
-@media (prefers-color-scheme: light) {
-    :root {
-        --bg-primary: #F4F4F5; --text-main: #09090B; --text-muted: rgba(0,0,0,0.6); --text-subtle: rgba(0,0,0,0.5);
-        --surface: #FFFFFF; --surface-active: rgba(0,0,0,0.08); --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.25);
-        --c-emerald: #059669; --c-amber: #D97706; --c-rose: #DC2626; --c-blue: #2563EB;
+@media (prefers-color-scheme: dark) {
+    :root { /* Dark Mode (Retro Synth/OLED) */
+        --bg-primary: #121212;
+        --text-main: #FDFDFD;
+        --text-muted: rgba(253, 253, 253, 0.65);
+        --text-subtle: rgba(253, 253, 253, 0.4);
+        --surface: #1E1E1E;
+        --surface-active: #2C2C2C;
+        --border: #2A2A2A;
+        --border-strong: #444444;
+        --c-emerald: #00F5D4; /* Neon Seafoam */
+        --c-amber: #FEE440;   /* Neon Yellow */
+        --c-rose: #F15BB5;    /* Neon Pink */
+        --c-blue: #00BBF9;    /* Neon Cyan */
     }
 }
 
@@ -241,46 +250,40 @@ css = """
 .app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
 .wordmark { font-family: 'Inter', sans-serif; font-size: 2.2rem; font-weight: 800; color: var(--text-main); letter-spacing: -1px; line-height: 1; }
 .tagline { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-subtle); margin-top: 4px; }
-.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
+.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(42, 157, 143, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
 
 .quote-box { text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 1.5rem;}
 .quote-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; color: var(--text-main); font-style: italic; font-weight: 500; letter-spacing: 0.2px;}
 
-/* ── SPOTIFY STYLE PILL NAVIGATION ── */
+/* ── SPOTIFY STYLE ISOLATED TABS ── */
 div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; }
 div[data-testid="stSegmentedControl"] > div {
-    background-color: transparent !important;
+    background: transparent !important;
     border: none !important;
-    gap: 8px !important;
+    gap: 12px !important;
     padding: 0 !important;
 }
-/* Individual Inactive Pill */
-div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"] {
-    background-color: var(--surface) !important;
-    border-radius: 24px !important;
+div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
+div[data-testid="stSegmentedControl"] label {
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    padding: 6px 14px !important;
+    margin: 0 !important;
 }
-/* Active Pill */
-div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
-    background-color: var(--text-main) !important;
-    border: none !important;
-}
-/* Label Formatting */
-div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"] label {
+div[data-testid="stSegmentedControl"] label div {
     color: var(--text-muted) !important;
     font-weight: 600 !important;
-    padding: 6px 14px !important;
-    font-size: 0.8rem !important;
+    font-size: 0.75rem !important;
 }
-/* Active Label Formatting */
-div[data-testid="stSegmentedControl"] > div > [data-testid="stSegmentedControlSegment"][aria-checked="true"] label {
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] {
+    background: var(--text-main) !important;
+    border-color: var(--text-main) !important;
+}
+div[data-testid="stSegmentedControl"] label[aria-checked="true"] div {
     color: var(--bg-primary) !important;
     font-weight: 800 !important;
 }
-/* Hide Native Streamlit Sliding Background */
-div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
-/* Hide secondary internal label divs */
-div[data-testid="stSegmentedControl"] [data-testid="stWidgetLabel"] { display: none; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
@@ -307,9 +310,9 @@ div[data-testid="stSegmentedControl"] [data-testid="stWidgetLabel"] { display: n
 .tj-st { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-top:10px;}
 
 .tier-item { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); }
-.tier-item.completed { background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); }
+.tier-item.completed { background: rgba(42, 157, 143, 0.05); border: 1px solid rgba(42, 157, 143, 0.3); }
 .tier-item.completed .tier-name { color: var(--c-emerald); }
-.tier-item.current { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15); }
+.tier-item.current { background: rgba(42, 157, 143, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(42, 157, 143, 0.15); }
 .tier-item.locked { opacity: 0.3; }
 .tier-emoji { font-size: 1.5rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 8px; }
 .tier-details { flex-grow: 1; }
@@ -320,9 +323,9 @@ div[data-testid="stSegmentedControl"] [data-testid="stWidgetLabel"] { display: n
 
 div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
-div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important; z-index: 2 !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: #FFFFFF !important; border: 3px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(42, 157, 143, 0.5) !important; z-index: 2 !important; }
 
-/* Selector Controls */
+/* Selector Controls (Centering Fix) */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important;}
@@ -421,7 +424,10 @@ def eval_metric(metric, actual, profile, mmt=None, bft=None):
     return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
 
 def get_gradient(metric, profile, max_mag, is_smart_override=False):
-    c_g = "rgba(16, 185, 129, 0.85)"; c_o = "rgba(245, 158, 11, 0.85)"; c_r = "rgba(239, 68, 68, 0.85)"
+    c_g = "var(--c-emerald)"
+    c_o = "var(--c-amber)"
+    c_r = "var(--c-rose)"
+    
     def to_pct(val): return max(min(((val + max_mag) / (2 * max_mag)) * 100, 100), 0)
 
     if metric == 'Muscle Mass (kg)':
@@ -584,7 +590,7 @@ if app_view == "Entry":
     <div class="app-bar">
         <div>
             <div class="wordmark">METRICS</div>
-            <div class="tagline">Data Engine V38 | {get_display_name(st.session_state['current_user'])}</div>
+            <div class="tagline">Data Engine V39 | {get_display_name(st.session_state['current_user'])}</div>
         </div>
         <div class="live-pill"><span class="pdot"></span>SYNCED</div>
     </div>
@@ -615,7 +621,7 @@ if app_view == "Entry":
         elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
             st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(42, 157, 143, 0.1); border:1px solid rgba(42, 157, 143, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
 
     delta_w = last['Weight (kg)'] - prev['Weight (kg)']
     delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
@@ -671,7 +677,7 @@ elif app_view == "Trends":
     if len(df_window_full) < 3:
         st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
-    font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='rgba(150,150,150,0.8)')
+    font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='var(--text-muted)')
     for metric in METRICS:
         if metric != 'Weight (kg)' and not has_enough_comp_data:
             continue
@@ -708,15 +714,15 @@ elif app_view == "Trends":
         
         # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
-        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(255,255,255,0.15)', width=1), marker=dict(size=4, color='rgba(255,255,255,0.15)'), hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
         
-        # Active Data (After Start Epoch) - Solid Blue
+        # Active Data (After Start Epoch) - Solid Blue (Retro Teal)
         spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#028090', width=2.5), marker=dict(size=5, color='#028090'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
         # Bold Start Epoch Line
         epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="rgba(255,255,255,0.8)", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="rgba(255,255,255,0.8)")
+        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="var(--border-strong)", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="var(--text-muted)")
         
         # Target Math
         current_date = spec_recent['Date'].max()
@@ -738,9 +744,9 @@ elif app_view == "Trends":
             target_val_at_end = start_y + (daily_rate * days_span)
             
             # End Target Line
-            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="rgba(16, 185, 129, 0.4)", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="var(--c-emerald)")
+            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="var(--c-emerald)", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="var(--c-emerald)")
             # End Target Marker
-            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="JetBrains Mono"), hoverinfo='skip'))
+            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#2A9D8F', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#2A9D8F", size=10, family="JetBrains Mono"), hoverinfo='skip'))
             # Target Path
             fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
@@ -751,17 +757,20 @@ elif app_view == "Trends":
             y_lower = traj_data[metric]['lower']
             
             # Fill Area for Confidence Interval
-            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(255,255,255,0.05)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
             
-            # Regression Line
-            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+            # Regression Line (Theme matched hex_col)
+            if c_txt == 'c-ok': line_c = '#2A9D8F'
+            elif c_txt == 'c-wrn': line_c = '#E9C46A'
+            else: line_c = '#E76F51'
+            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=line_c, width=2, dash='dash'), hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=10, b=0), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=9, color='rgba(150,150,150,0.8)')),
+            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='var(--text-muted)')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, tickfont=font_cfg, side='right')
+            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
