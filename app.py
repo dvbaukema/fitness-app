@@ -209,20 +209,20 @@ if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
-# CSS THEMES (RETRO WARM & SPOTIFY TABS)
+# CSS THEMES (FLOATING TABS & RETRO STYLING)
 # ══════════════════════════════════════════════════════════════
 css_light = """
     :root {
-        --bg-primary: #F6F4F0; --text-main: #2A2A2A; --text-muted: rgba(42, 42, 42, 0.65); --text-subtle: rgba(42, 42, 42, 0.45);
-        --surface: #FFFFFF; --surface-active: #EAE6DF; --border: #E0DBD2; --border-strong: #C4BEB2;
-        --c-emerald: #FFB33F; --c-amber: #FF4400; --c-rose: #C00707; --c-blue: #028090;
+        --bg-primary: #F4F4F5; --text-main: #09090B; --text-muted: rgba(0,0,0,0.6); --text-subtle: rgba(0,0,0,0.5);
+        --surface: #FFFFFF; --surface-active: rgba(0,0,0,0.08); --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.25);
+        --c-emerald: #10B981; --c-amber: #F59E0B; --c-rose: #EF4444; --c-blue: #3B82F6;
     }
 """
 css_dark = """
     :root {
         --bg-primary: #121212; --text-main: #FDFDFD; --text-muted: rgba(253, 253, 253, 0.65); --text-subtle: rgba(253, 253, 253, 0.4);
         --surface: #1E1E1E; --surface-active: #2C2C2C; --border: #2A2A2A; --border-strong: #444444;
-        --c-emerald: #FFB33F; --c-amber: #FF4400; --c-rose: #C00707; --c-blue: #00BBF9;
+        --c-emerald: #10B981; --c-amber: #F59E0B; --c-rose: #EF4444; --c-blue: #3B82F6;
     }
 """
 
@@ -246,34 +246,33 @@ css = theme_vars + """
 .app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
 .wordmark { font-family: 'Inter', sans-serif; font-size: 2.2rem; font-weight: 800; color: var(--text-main); letter-spacing: -1px; line-height: 1; }
 .tagline { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-subtle); margin-top: 4px; }
-.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(255, 179, 63, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
+.live-pill { display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.15); border-radius: 4px; padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1px; }
 
 .quote-box { text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 1.5rem;}
 .quote-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; color: var(--text-main); font-style: italic; font-weight: 500; letter-spacing: 0.2px;}
 
-/* ── SPOTIFY STYLE ISOLATED TABS ── */
-div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; }
-div[data-testid="stSegmentedControl"] > div > div:first-child { display: none !important; }
+/* ── TRUE FLOATING ISLAND TABS ── */
+div[data-testid="stSegmentedControl"] { margin-bottom: 1.5rem; display: flex; justify-content: center; }
 div[data-testid="stSegmentedControl"] > div {
-    background: transparent !important;
+    background-color: transparent !important;
     border: none !important;
-    gap: 12px !important;
+    box-shadow: none !important;
+    gap: 8px !important;
     padding: 0 !important;
-    display: flex !important;
 }
-div[data-testid="stSegmentedControl"] label {
-    background: var(--surface) !important;
+div[data-testid="stSegmentedControl"] > div > div:not([data-testid="stSegmentedControlSegment"]) { display: none !important; opacity: 0 !important; }
+div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] {
+    background-color: var(--surface) !important;
+    border-radius: 25px !important;
     border: 1px solid var(--border) !important;
-    border-radius: 50px !important;
-    padding: 10px 16px !important;
-    margin: 0 !important;
-    cursor: pointer !important;
-    flex: 1 !important;
-    text-align: center !important;
+    padding: 4px 6px !important;
 }
-div[data-testid="stSegmentedControl"] label div { color: var(--text-muted) !important; font-weight: 700 !important; font-size: 0.75rem !important; }
-div[data-testid="stSegmentedControl"] label[aria-checked="true"] { background: var(--text-main) !important; border-color: var(--text-main) !important; }
-div[data-testid="stSegmentedControl"] label[aria-checked="true"] div { color: var(--bg-primary) !important; font-weight: 800 !important; }
+div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] {
+    background-color: var(--text-main) !important;
+    border: 1px solid var(--text-main) !important;
+}
+div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"] p { color: var(--text-muted) !important; font-weight: 600 !important; font-size: 0.85rem !important; }
+div[data-testid="stSegmentedControl"] [data-testid="stSegmentedControlSegment"][aria-checked="true"] p { color: var(--bg-primary) !important; font-weight: 800 !important; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
@@ -285,7 +284,7 @@ div[data-testid="stSegmentedControl"] label[aria-checked="true"] div { color: va
 .c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; }
 
 .chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem; }
-.chart-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0px; }
+.chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0px; }
 .t-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; padding: 4px 6px; border-radius: 4px; font-weight: 700; display: inline-block; letter-spacing: 0.5px;}
 
 .hud-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
@@ -300,9 +299,9 @@ div[data-testid="stSegmentedControl"] label[aria-checked="true"] div { color: va
 .tj-st { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-top:10px;}
 
 .tier-item { display: flex; align-items: center; gap: 15px; padding: 12px; border-radius: 12px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); }
-.tier-item.completed { background: rgba(255, 179, 63, 0.05); border: 1px solid rgba(255, 179, 63, 0.3); }
+.tier-item.completed { background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); }
 .tier-item.completed .tier-name { color: var(--c-emerald); }
-.tier-item.current { background: rgba(255, 179, 63, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(255, 179, 63, 0.15); }
+.tier-item.current { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--c-emerald); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15); }
 .tier-item.locked { opacity: 0.3; }
 .tier-emoji { font-size: 1.5rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 8px; }
 .tier-details { flex-grow: 1; }
@@ -313,7 +312,7 @@ div[data-testid="stSegmentedControl"] label[aria-checked="true"] div { color: va
 
 div[data-testid="stSlider"] label { font-size: 0.75rem !important; color: var(--text-muted) !important; text-transform: uppercase !important; font-weight: 700 !important; letter-spacing: 1px !important; }
 div[data-testid="stSlider"] > div > div > div { height: 12px !important; border-radius: 6px !important; background: var(--surface-active) !important; position: relative !important;}
-div[data-testid="stSlider"] div[role="slider"] { width: 28px !important; height: 28px !important; background: var(--bg-primary) !important; border: 4px solid var(--c-emerald) !important; box-shadow: 0 0 15px rgba(255, 179, 63, 0.4) !important; z-index: 2 !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 24px !important; height: 24px !important; background: #3B82F6 !important; border: 2px solid #FFFFFF !important; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4) !important; z-index: 2 !important; }
 
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 8px !important; color: var(--text-main) !important; display: flex !important; align-items: center !important; justify-content: center !important; min-height: 3.5rem !important; padding: 0 !important;}
@@ -399,18 +398,18 @@ def eval_metric(metric, actual, profile, mmt=None, bft=None):
     if metric == 'Weight (kg)':
         if mmt is not None and bft is not None:
             if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2:
-                return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
+                return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', '#10B981')
             if actual < lower and mmt >= -0.2 and bft < lower:
-                return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
+                return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', '#10B981')
 
     if metric == 'Muscle Mass (kg)':
-        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
-        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
-        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
+        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', '#10B981')
+        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', '#F59E0B')
+        return ('c-err', 'bg-err', 'SUB-OPTIMAL', '#EF4444')
         
-    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
-    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
-    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
+    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', '#EF4444')
+    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', '#F59E0B')
+    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', '#10B981')
 
 def get_gradient(metric, profile, max_mag, is_smart_override=False):
     c_g = "var(--c-emerald)"
@@ -444,7 +443,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
     if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
 
-    # CSS Grid logic for perfectly stable text
+    # Perfect CSS Grid layout for overlapping text issue
     if metric == 'Muscle Mass (kg)':
         max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
         bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"JetBrains Mono\", monospace; font-size:0.6rem; color:var(--text-subtle); margin-top:6px; font-weight:600;'><span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:800;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span></div>"
@@ -506,6 +505,7 @@ if has_enough_weight_data:
     X_w = X_w_raw.reshape(-1, 1)
     y_w = df_w['Weight (kg)'].values
     
+    # Regression & Confidence Intervals
     res_w = stats.linregress(X_w_raw, y_w)
     slope_w = res_w.slope
     stderr_w = res_w.stderr
@@ -518,6 +518,7 @@ if has_enough_weight_data:
         future_days_w  = np.array([[start_day_w + i] for i in range(0, days_to_end_w + 10)])
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
         
+        # Calculate Error Cone
         pred_y_w = res_w.intercept + slope_w * future_days_w.flatten()
         margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96 # 95% CI
         
@@ -526,7 +527,7 @@ if has_enough_weight_data:
             'preds': pred_y_w,
             'upper': pred_y_w + margin_of_error_w,
             'lower': pred_y_w - margin_of_error_w,
-            'final_error': margin_of_error_w[-10] 
+            'final_error': margin_of_error_w[-10] # Error exactly on Target Date
         }
 
 if has_enough_comp_data:
@@ -551,7 +552,7 @@ if has_enough_comp_data:
             monthly_trends[m] = slope_c * 30
             
             pred_y_c = res_c.intercept + slope_c * future_days_c.flatten()
-            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96
+            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96 # 95% CI
             
             traj_data[m] = {
                 'dates': future_dates_c, 
@@ -608,7 +609,7 @@ if app_view == "Entry":
         elif "Cut" in st.session_state['current_goal'] and recent_bf_avg < 10.0:
             st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); font-size:0.7rem; color:var(--c-rose); font-weight:600; text-align:center;'>⚠️ TOO LEAN FOR CUT ({recent_bf_avg:.1f}% AVG)</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(255, 179, 63, 0.1); border:1px solid rgba(255, 179, 63, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='padding:8px; border-radius:6px; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); font-size:0.7rem; color:var(--c-emerald); font-weight:600; text-align:center;'>✓ VALID FOR CURRENT BODY COMP ({recent_bf_avg:.1f}% AVG FAT)</div>", unsafe_allow_html=True)
 
     delta_w = last['Weight (kg)'] - prev['Weight (kg)']
     delta_bf = last['Body Fat (%)'] - prev['Body Fat (%)']
@@ -662,7 +663,7 @@ elif app_view == "Trends":
         st.stop()
         
     if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(255, 68, 0, 0.1); border:1px solid rgba(255, 68, 0, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     font_cfg = dict(family='JetBrains Mono, monospace', size=10, color='var(--text-muted)')
     for metric in METRICS:
@@ -675,12 +676,13 @@ elif app_view == "Trends":
         target = ideal_rates[metric][0]
         c_txt, c_bg, _, hex_col = eval_metric(metric, trend, ideal_rates)
         
+        # Calculate clean range projection
         if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10]
+            final_pred = traj_data[metric]['preds'][-10] 
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"JetBrains Mono\", monospace; font-size:0.7rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
+            proj_html = f"<div style='font-family:\"Inter\", sans-serif; font-size:0.75rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
@@ -688,7 +690,12 @@ elif app_view == "Trends":
         <div class="chart-blk">
             <div class="chart-meta" style="align-items: flex-start;">
                 <div>
-                    <div style="font-size:1.1rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">{METRIC_SHORT[metric]} <span style="font-family:'JetBrains Mono'; font-weight:800; color:var(--c-blue); margin-left:8px; font-size:1.3rem;">{last_val:.1f} <span style="font-size:0.8rem; color:var(--text-muted);">{unit}</span></span></div>
+                    <div style="font-size:0.9rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">
+                        {METRIC_SHORT[metric]} 
+                        <span style="font-family:'Inter', sans-serif; font-weight:800; color:var(--text-main); margin-left:8px; font-size:1.5rem;">
+                            {last_val:.1f} <span style="font-size:0.9rem; color:var(--text-muted);">{unit}</span>
+                        </span>
+                    </div>
                     {proj_html}
                 </div>
                 <div style="text-align: right;">
@@ -700,15 +707,19 @@ elif app_view == "Trends":
         
         fig = go.Figure()
         
+        # Historical Data (Before Start Epoch) - Faded Grey
         df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
-        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.3)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.3)'), hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=df_hist['Date'], y=df_hist[metric], mode='lines+markers', name='History', line=dict(color='rgba(150,150,150,0.4)', width=1.5), marker=dict(size=4, color='rgba(150,150,150,0.4)'), hoverinfo='skip'))
         
+        # Active Data (After Start Epoch) - Solid Blue
         spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='var(--c-blue)', width=2.5), marker=dict(size=5, color='var(--c-blue)'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
+        fig.add_trace(go.Scatter(x=spec_recent['Date'], y=spec_recent[metric], mode='lines+markers', name='Active Data', line=dict(color='#3B82F6', width=2.5), marker=dict(size=5, color='#3B82F6'), hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'))
         
+        # Bold Start Epoch Line
         epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="var(--border-strong)", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="var(--text-muted)")
+        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="#888888", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="#888888")
         
+        # Target Math
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
         
@@ -726,28 +737,31 @@ elif app_view == "Trends":
         
         if days_span > 0:
             target_val_at_end = start_y + (daily_rate * days_span)
-            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="var(--c-emerald)", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="var(--c-emerald)")
-            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#FFB33F', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#FFB33F", size=10, family="JetBrains Mono"), hoverinfo='skip'))
+            
+            # End Target Line
+            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="#10B981")
+            # End Target Marker
+            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="Inter"), hoverinfo='skip'))
+            # Target Path
             fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
+        # Regression Trajectory Path w/ Error Cone (Confidence Interval)
         if 'dates' in traj_data.get(metric, {}):
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
             
+            # Fill Area for Confidence Interval
             fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
             
-            if c_txt == 'c-ok': line_c = '#FFB33F'
-            elif c_txt == 'c-wrn': line_c = '#FF4400'
-            else: line_c = '#C00707'
-            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=line_c, width=2, dash='dash'), hoverinfo='skip'))
+            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='var(--text-muted)')),
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, tickfont=font_cfg, side='right')
+            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -759,7 +773,7 @@ elif app_view == "Analysis":
         st.stop()
 
     if len(df_window_full) < 3:
-        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(255, 68, 0, 0.1); border:1px solid rgba(255, 68, 0, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:1rem; padding:8px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.2); font-size:0.7rem; color:var(--c-amber); font-weight:600; text-align:center;'>⚠️ NOT ENOUGH DATA SINCE CUSTOM START DATE. DEFAULTING TO LAST LOGS.</div>", unsafe_allow_html=True)
 
     last = df.iloc[-1]
     w, bf, mm = last['Weight (kg)'], last['Body Fat (%)'], last['Muscle Mass (kg)']
@@ -812,6 +826,7 @@ elif app_view == "Analysis":
     w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
     diags = []
     
+    # ── SMART RECOMPOSITION DIAGNOSTICS ──
     is_muscle_driven = (wt > w_upper) and has_enough_comp_data and (mmt >= (wt * 0.4)) and (bft <= 0.2)
     is_fat_loss_driven = (wt < w_lower) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
 
@@ -912,8 +927,9 @@ elif app_view == "Data":
         with c2:
             if pd.Timestamp(row['Date']) >= seven_days_ago:
                 if st.button("🗑️", key=f"del_{i}", help="Delete Record"):
-                    delete_row_from_gsheet(st.session_state['sheet_url'], i)
-                    st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
+                    new_df = df.drop(index=i).reset_index(drop=True)
+                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
+                    st.session_state['active_df'] = new_df
                     load_data.clear()
                     system_alert("RECORD PURGED", "err")
                     st.rerun()
@@ -940,7 +956,7 @@ elif app_view == "Settings":
 
     st.markdown('<div class="settings-lbl">Features & Preferences</div>', unsafe_allow_html=True)
     
-    new_theme = st.selectbox("App Theme", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
+    new_theme = st.selectbox("App Theme Preference", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
     if new_theme != st.session_state['theme_pref']:
         st.session_state['theme_pref'] = new_theme
         st.query_params.theme = new_theme
