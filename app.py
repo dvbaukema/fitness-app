@@ -124,18 +124,31 @@ def overwrite_sheet_range(sheet_url, range_name, df):
         return False
 
 # ══════════════════════════════════════════════════════════════
-# SHEET‑SPECIFIC HELPERS (WITH FALLBACK)
+# SHEET‑SPECIFIC HELPERS — NOW MATCHING ACTUAL TABS
 # ══════════════════════════════════════════════════════════════
 
-def load_body_data(sheet_url):
-    """
-    Reads body metrics.
-    Tries 'Body' tab first; if empty, falls back to the first sheet (range A:E).
-    """
-    df = read_sheet_range(sheet_url, 'Body!A:E')
+# Tab 1: "Body" → personal constants (height, gender, age)
+def load_data_constants(sheet_url):
+    df = read_sheet_range(sheet_url, 'Body!A1:C2')
     if df.empty:
-        # Fallback to original first sheet
-        df = read_sheet_range(sheet_url, 'A:E')
+        return {'height': int(st.query_params.get("height", 180)),
+                'gender': st.query_params.get("gender", "male").lower(),
+                'age': int(st.query_params.get("age", 25))}
+    try:
+        h = int(df.iloc[0,0]) if not df.empty else 180
+        g = df.iloc[0,1] if df.shape[1]>1 else 'male'
+        a = int(df.iloc[0,2]) if df.shape[1]>2 else 25
+        return {'height': h, 'gender': g.lower(), 'age': a}
+    except:
+        return {'height': 180, 'gender': 'male', 'age': 25}
+
+def write_data_constants(sheet_url, height, gender, age):
+    vals = [[height, gender, age]]
+    return overwrite_sheet_range(sheet_url, 'Body!A1:C2', pd.DataFrame(vals, columns=['Height', 'Gender', 'Age']))
+
+# Tab 2: "Data" → body measurement history
+def load_body_data(sheet_url):
+    df = read_sheet_range(sheet_url, 'Data!A:E')
     if df.empty:
         return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
     if 'Time' in df.columns:
@@ -147,61 +160,20 @@ def load_body_data(sheet_url):
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
 def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
-    """
-    Appends to 'Body' tab if it exists, otherwise falls back to the first sheet.
-    We try 'Body!A:E' first; if that fails (e.g., sheet doesn't exist), we fallback to 'A:E'.
-    """
     time_str = (datetime.utcnow() + timedelta(hours=2)).strftime('%H:%M:%S')
-    # Attempt to append to 'Body' sheet; if that fails (sheet missing), use default range.
-    if not append_to_sheet(sheet_url, 'Body!A:E', [[date_str, time_str, weight, body_fat, muscle_mass]]):
-        # Fallback: append to first sheet's A:E
-        append_to_sheet(sheet_url, 'A:E', [[date_str, time_str, weight, body_fat, muscle_mass]])
+    return append_to_sheet(sheet_url, 'Data!A:E', [[date_str, time_str, weight, body_fat, muscle_mass]])
 
 def overwrite_body_sheet(sheet_url, df):
-    """
-    Overwrites the body data. Tries 'Body' sheet first, then falls back to first sheet.
-    """
     values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
     for _, row in df.iterrows():
         d = pd.Timestamp(row['Date'])
         values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
-    if not overwrite_sheet_range(sheet_url, 'Body!A:E', pd.DataFrame(values[1:], columns=values[0])):
-        overwrite_sheet_range(sheet_url, 'A:E', pd.DataFrame(values[1:], columns=values[0]))
+    return overwrite_sheet_range(sheet_url, 'Data!A:E', pd.DataFrame(values[1:], columns=values[0]))
 
-def load_data_constants(sheet_url):
-    """
-    Reads height/gender/age from 'Data' tab (A1:C2).
-    If missing, returns defaults (from localStorage or 180/male/25).
-    """
-    df = read_sheet_range(sheet_url, 'Data!A1:C2')
-    if df.empty:
-        # Fallback: try reading from first sheet? Not needed, just use defaults.
-        return {'height': int(st.session_state.get('height_cm', 180)),
-                'gender': st.session_state.get('gender', 'male').lower(),
-                'age': int(st.session_state.get('age', 25))}
-    try:
-        h = int(df.iloc[0,0]) if not df.empty else 180
-        g = df.iloc[0,1] if df.shape[1]>1 else 'male'
-        a = int(df.iloc[0,2]) if df.shape[1]>2 else 25
-        return {'height': h, 'gender': g.lower(), 'age': a}
-    except:
-        return {'height': int(st.session_state.get('height_cm', 180)),
-                'gender': st.session_state.get('gender', 'male').lower(),
-                'age': int(st.session_state.get('age', 25))}
-
-def write_data_constants(sheet_url, height, gender, age):
-    """
-    Writes constants to 'Data' tab (A1:C2). Creates/overwrites that range.
-    """
-    vals = [[height, gender, age]]
-    # Only write to 'Data' sheet – will create the sheet if it doesn't exist (via update).
-    return overwrite_sheet_range(sheet_url, 'Data!A1:C2', pd.DataFrame(vals, columns=['Height', 'Gender', 'Age']))
-
+# Tab 3: "Workout" → workout logs
 def load_workout_data(sheet_url):
-    """Read Workout sheet with columns: Date, Exercise, Weight (kg), Reps set 1..4"""
     df = read_sheet_range(sheet_url, 'Workout!A:G')
     if df.empty:
-        # Fallback: try first sheet? No, Workout is its own tab; if missing, return empty.
         return pd.DataFrame(columns=['Date','Exercise','Weight (kg)','Reps set 1','Reps set 2','Reps set 3','Reps set 4'])
     expected = ['Date','Exercise','Weight (kg)','Reps set 1','Reps set 2','Reps set 3','Reps set 4']
     for c in expected:
@@ -215,12 +187,10 @@ def load_workout_data(sheet_url):
     return df[expected].dropna(subset=['Date','Exercise']).reset_index(drop=True)
 
 def append_workout_row(sheet_url, row):
-    """row: [date, exercise, weight, rep1, rep2, rep3, rep4]"""
-    # Try Workout sheet, fallback? Better to just write to 'Workout' tab.
     return append_to_sheet(sheet_url, 'Workout!A:G', [row])
 
 # ══════════════════════════════════════════════════════════════
-# LOAD SECRETS & DIRECTORY (unchanged)
+# LOAD SECRETS & DIRECTORY
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -246,7 +216,7 @@ DEFAULT_QUOTES = [
 ]
 
 # ══════════════════════════════════════════════════════════════
-# SESSION STATE INIT (unchanged)
+# SESSION STATE INITIALIZATION
 # ══════════════════════════════════════════════════════════════
 if 'users' not in st.session_state: st.session_state['users'] = USER_DATA
 if 'auth_status' not in st.session_state: st.session_state['auth_status'] = False
@@ -279,7 +249,7 @@ if 'protein_custom' not in st.session_state:
 if 'nutrition_phase_start' not in st.session_state:
     st.session_state['nutrition_phase_start'] = datetime.now().date()
 
-# Body constants (try Data sheet, else use localStorage defaults)
+# Body constants (now read from "Body" sheet)
 if 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_data_constants(st.session_state['sheet_url'])
 
@@ -308,9 +278,8 @@ if 'exercises' not in st.session_state:
         {"Name": "45° Hyperextension", "Category": "Legs", "Muscle Group": "Glutes/Lower Back"},
     ]
 
-
 # ══════════════════════════════════════════════════════════════
-# CSS THEME & STYLES (same as before)
+# CSS THEME & STYLES
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F0EDE8;
@@ -990,7 +959,7 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] {
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN via URL parameter
+# AUTO‑LOGIN
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
@@ -1012,7 +981,7 @@ if not st.session_state['auth_status']:
         st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# ADMIN PROFILE SELECTION SCREEN
+# ADMIN PROFILE SELECTION
 # ══════════════════════════════════════════════════════════════
 if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.markdown("""
@@ -1037,7 +1006,7 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# RECOMPOSITION MATH ENGINE & GLOBAL HELPERS
+# RECOMPOSITION MATH ENGINE & HELPERS
 # ══════════════════════════════════════════════════════════════
 def sgn(v): return "+" if v > 0 else ""
 
@@ -1142,7 +1111,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     return html_block
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION CONTEXT ADAPTIVE
+# NUTRITION ADAPTIVE LOGIC (unchanged)
 # ══════════════════════════════════════════════════════════════
 def get_context_adaptive_recommendation(protocol, weight_trend, bf_trend, current_offset, base_calories):
     w_lower, w_upper = DEFAULT_PROFILES[protocol]['Weight (kg)'][1], DEFAULT_PROFILES[protocol]['Weight (kg)'][2]
@@ -1164,12 +1133,12 @@ def get_context_adaptive_recommendation(protocol, weight_trend, bf_trend, curren
     return ("Trends are on track. No adjustment needed.", current_offset)
 
 # ══════════════════════════════════════════════════════════════
-# DATA LOADING & STATISTICAL ENGINE
+# DATA LOADING & STATISTICAL ENGINE (now from 'Data' sheet)
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url):
     if not url: raise Exception("URL Missing")
-    df = load_body_data(url)
+    df = load_body_data(url)   # reads from 'Data' tab
     if df.empty: raise Exception("No body data found – check sharing permissions.")
     return df
 
@@ -1260,7 +1229,7 @@ app_view = st.radio("Nav", ["Entry", "Trends", "Analysis", "Data", "Nutrition", 
                     horizontal=True, label_visibility="collapsed")
 
 # ══════════════════════════════════════════════════════════════
-# ENTRY TAB
+# ENTRY TAB (reads/writes to 'Data' sheet)
 # ══════════════════════════════════════════════════════════════
 if app_view == "Entry":
     header_placeholder.markdown(f"""
@@ -1346,7 +1315,7 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# TRENDS TAB
+# TRENDS TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Trends":
     header_placeholder.empty()
@@ -1478,7 +1447,7 @@ elif app_view == "Trends":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# ANALYSIS TAB
+# ANALYSIS TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Analysis":
     header_placeholder.empty()
@@ -1679,7 +1648,7 @@ elif app_view == "Data":
                 st.write("")
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION TAB (REVISED)
+# NUTRITION TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
     header_placeholder.empty()
@@ -1752,12 +1721,11 @@ elif app_view == "Nutrition":
         st.info("Need at least 3 body weight + 5 composition entries for adaptive feedback.")
 
 # ══════════════════════════════════════════════════════════════
-# WORKOUT TAB (MATCHING ACTUAL SHEET FORMAT)
+# WORKOUT TAB (matching actual 'Workout' sheet)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Workout":
     header_placeholder.empty()
 
-    # Predefined templates
     UPPER1 = [
         ("DB Press (45°)", 20),
         ("Incline Chest Press Machine", 22.5),
@@ -1800,7 +1768,6 @@ elif app_view == "Workout":
     workout_type = st.selectbox("Workout", list(templates.keys()))
     exercises = templates[workout_type]
 
-    # Load workout history for weight prefill
     workout_df = load_workout_data(st.session_state['sheet_url'])
     if not workout_df.empty:
         last_date = workout_df['Date'].max().strftime('%d %b %Y')
@@ -1814,7 +1781,6 @@ elif app_view == "Workout":
         log_data = []
         for ex_name, default_weight in exercises:
             st.markdown(f"**{ex_name}**")
-            # Prefill weight from last logged entry
             if not workout_df.empty:
                 ex_hist = workout_df[workout_df['Exercise'] == ex_name]
                 last_weight = ex_hist['Weight (kg)'].values[0] if not ex_hist.empty else default_weight
@@ -1826,7 +1792,7 @@ elif app_view == "Workout":
             weight = st.number_input(f"{ex_name} Weight (kg)", value=float(last_weight),
                                      step=0.5, key=f"w_{ex_name}_{workout_type}")
             reps = []
-            for s in range(4):  # always 4 sets, user can leave 0
+            for s in range(4):
                 rep_val = st.number_input(f"Set {s+1} reps", min_value=0, value=0, key=f"rep_{ex_name}_{s}_{workout_type}")
                 reps.append(rep_val)
             log_data.append((ex_name, weight, reps))
@@ -1835,7 +1801,6 @@ elif app_view == "Workout":
         workout_date = st.date_input("Workout Date", datetime.now().date())
         if st.form_submit_button("Log Workout"):
             for ex_name, weight, reps in log_data:
-                # Only log if at least one set has reps > 0
                 if any(r > 0 for r in reps):
                     row = [workout_date.strftime('%Y-%m-%d'), ex_name, weight] + reps
                     append_workout_row(st.session_state['sheet_url'], row)
@@ -1843,7 +1808,7 @@ elif app_view == "Workout":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# SETTINGS TAB (with Data sheet sync)
+# SETTINGS TAB (writes constants to 'Body' sheet)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
     header_placeholder.empty()
