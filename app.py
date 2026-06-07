@@ -124,13 +124,8 @@ def overwrite_sheet_range(sheet_url, range_name, df):
 
 # ══════════════════════════════════════════════════════════════
 # SHEET‑SPECIFIC HELPERS
-#   Body   → constants (height, gender, age)
-#   Data   → time‑series body measurements
-#   Workout → per‑set logs (Date, Workout Type, Exercise, Weight, Set, Reps)
 # ══════════════════════════════════════════════════════════════
-
 def load_body_constants(sheet_url):
-    """Read height, gender, age from 'Body' tab (A1:C2)."""
     df = read_sheet_range(sheet_url, 'Body!A1:C2')
     if df.empty:
         return {'height': 180, 'gender': 'male', 'age': 25}
@@ -143,7 +138,6 @@ def load_body_constants(sheet_url):
         return {'height': 180, 'gender': 'male', 'age': 25}
 
 def load_body_data(sheet_url):
-    """Read time‑series body metrics from 'Data' tab (A:E)."""
     df = read_sheet_range(sheet_url, 'Data!A:E')
     if df.empty:
         return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
@@ -167,7 +161,6 @@ def overwrite_body_sheet(sheet_url, df):
     return overwrite_sheet_range(sheet_url, 'Data!A:E', pd.DataFrame(values[1:], columns=values[0]))
 
 def load_workout_data(sheet_url):
-    """Read Workout sheet: Date, Workout Type, Exercise, Weight, Set, Reps."""
     df = read_sheet_range(sheet_url, 'Workout!A:F')
     if df.empty:
         return pd.DataFrame(columns=['Date','Workout Type','Exercise','Weight','Set','Reps'])
@@ -182,7 +175,6 @@ def load_workout_data(sheet_url):
     return df[expected].dropna(subset=['Date','Exercise']).reset_index(drop=True)
 
 def append_workout_rows(sheet_url, rows):
-    """rows: list of lists [date, workout_type, exercise, weight, set_number, reps]"""
     for r in rows:
         append_to_sheet(sheet_url, 'Workout!A:F', [r])
 
@@ -236,11 +228,9 @@ if 'analysis_start_date' not in st.session_state:
 if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", '2026-09-01')).date()
 
-# Body constants (from 'Body' sheet)
 if 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
 
-# Nutrition state
 if 'activity_level' not in st.session_state:
     st.session_state['activity_level'] = st.query_params.get("activity", "moderate")
 if 'calorie_offset' not in st.session_state:
@@ -250,7 +240,7 @@ if 'protein_custom' not in st.session_state:
 if 'nutrition_phase_start' not in st.session_state:
     st.session_state['nutrition_phase_start'] = datetime.now().date()
 
-# Workout exercises (predefined)
+# Workout exercises
 if 'exercises' not in st.session_state:
     st.session_state['exercises'] = [
         {"Name": "DB Press (45°)", "Category": "Chest", "Muscle Group": "Upper Chest"},
@@ -276,7 +266,7 @@ if 'exercises' not in st.session_state:
     ]
 
 # ══════════════════════════════════════════════════════════════
-# CSS THEME & STYLES
+# CSS (step buttons visible again)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F0EDE8;
@@ -308,7 +298,6 @@ css_light_vars = """
   --input-bg: #FAFAF8;
   --input-text: #1A1A1A;
 """
-
 css_dark_vars = """
   --bg-primary: #0F0F0F;
   --bg-secondary: #181818;
@@ -920,11 +909,7 @@ div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
   color: var(--text-main) !important;
 }
 
-button[aria-label="Step down"], button[aria-label="Step up"],
-button[title="Step down"], button[title="Step up"] {
-  display: none !important;
-}
-
+/* Removed hiding of step buttons – they are now visible everywhere */
 div[data-testid="stAlert"] {
   border-radius: 12px !important;
 }
@@ -1108,7 +1093,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     return html_block
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION CALCULATIONS (TDEE‑BASED)
+# NUTRITION CALCULATIONS (TDEE‑BASED, PROTEIN RANGES BY PROTOCOL)
 # ══════════════════════════════════════════════════════════════
 def calculate_bmr(weight_kg, height_cm, age, gender):
     if gender == "male":
@@ -1127,9 +1112,20 @@ def calculate_tdee(bmr, activity_level):
     return bmr * factors.get(activity_level, 1.55)
 
 def get_protocol_calorie_adjustment(protocol):
-    """Return daily kcal surplus/deficit based on monthly weight change target (7700 kcal ≈ 1 kg)."""
-    target_rate = DEFAULT_PROFILES[protocol]['Weight (kg)'][0]  # kg/month
-    return (target_rate * 7700) / 30  # daily kcal
+    target_rate = DEFAULT_PROFILES[protocol]['Weight (kg)'][0]
+    return (target_rate * 7700) / 30
+
+def get_protein_range(protocol, weight):
+    """Return (min_grams, max_grams) based on protocol and current weight."""
+    ranges = {
+        "Aggressive Cut": (2.0, 2.4),
+        "Lean Cut": (2.0, 2.3),
+        "Recomposition": (1.8, 2.1),
+        "Lean Bulk": (1.8, 2.2),
+        "Aggressive Bulk": (1.6, 1.9)
+    }
+    low_factor, high_factor = ranges.get(protocol, (1.6, 2.2))
+    return (round(weight * low_factor), round(weight * high_factor))
 
 def get_nutrition_targets(protocol, weight, height_cm, age, gender, activity_level, offset=0):
     bmr = calculate_bmr(weight, height_cm, age, gender)
@@ -1137,8 +1133,7 @@ def get_nutrition_targets(protocol, weight, height_cm, age, gender, activity_lev
     daily_adjustment = get_protocol_calorie_adjustment(protocol)
     base_calories = round(tdee + daily_adjustment)
     final_calories = base_calories + offset
-    protein_range = (round(weight * 1.6), round(weight * 2.2))
-    return final_calories, protein_range
+    return final_calories
 
 def get_context_adaptive_recommendation(protocol, weight_trend, bf_trend, current_offset, current_calories):
     w_lower, w_upper = DEFAULT_PROFILES[protocol]['Weight (kg)'][1], DEFAULT_PROFILES[protocol]['Weight (kg)'][2]
@@ -1256,7 +1251,7 @@ app_view = st.radio("Nav", ["Entry", "Trends", "Analysis", "Data", "Nutrition", 
                     horizontal=True, label_visibility="collapsed")
 
 # ══════════════════════════════════════════════════════════════
-# ENTRY TAB
+# ENTRY TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 if app_view == "Entry":
     header_placeholder.markdown(f"""
@@ -1342,7 +1337,7 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# TRENDS TAB
+# TRENDS TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Trends":
     header_placeholder.empty()
@@ -1474,7 +1469,7 @@ elif app_view == "Trends":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# ANALYSIS TAB
+# ANALYSIS TAB (unchanged)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Analysis":
     header_placeholder.empty()
@@ -1616,7 +1611,7 @@ elif app_view == "Analysis":
         st.markdown(engine_html, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# DATA TAB (FIXED LAYOUT)
+# DATA TAB (FIXED LAYOUT) – unchanged
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Data":
     header_placeholder.empty()
@@ -1675,10 +1670,12 @@ elif app_view == "Data":
                 st.write("")
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION TAB (TDEE‑BASED, NO HARDCODED DAY TYPES)
+# NUTRITION TAB (UPDATED WITH PROTOCOL HEADER & NARROWED PROTEIN)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
     header_placeholder.empty()
+    st.markdown(f"<div class='s-head' style='margin-top:0;'>Current Protocol: {active_goal}</div>", unsafe_allow_html=True)
+
     # Latest weight
     if len(df) > 0:
         current_weight = df.iloc[-1]['Weight (kg)']
@@ -1689,11 +1686,21 @@ elif app_view == "Nutrition":
     height, gender, age = bc['height'], bc['gender'], bc['age']
     activity = st.session_state['activity_level']
 
-    # Calculate targets
-    final_cals, prot_range = get_nutrition_targets(
+    # Calories
+    final_cals = get_nutrition_targets(
         active_goal, current_weight, height, age, gender, activity,
         offset=st.session_state['calorie_offset']
     )
+    # Protein range
+    prot_min, prot_max = get_protein_range(active_goal, current_weight)
+
+    # Clamp custom protein to range
+    custom_prot = st.session_state['protein_custom']
+    if custom_prot < prot_min or custom_prot > prot_max:
+        # If out of range, reset to middle of range
+        st.session_state['protein_custom'] = (prot_min + prot_max) // 2
+        st.query_params.protein_custom = str(st.session_state['protein_custom'])
+        custom_prot = st.session_state['protein_custom']
 
     st.markdown(f"""
     <div class="s-head" style="margin-top:0;">Daily Targets</div>
@@ -1705,14 +1712,14 @@ elif app_view == "Nutrition":
         </div>
         <div style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.2rem; text-align:center;">
             <div style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--text-subtle); letter-spacing:2px;">PROTEIN</div>
-            <div style="font-size:2.5rem; font-weight:700; color:var(--text-main); font-family:'DM Mono',monospace;">{st.session_state['protein_custom']}</div>
-            <div style="font-size:0.7rem; color:var(--text-muted);">g/day (custom · rec {prot_range[0]}–{prot_range[1]})</div>
+            <div style="font-size:2.5rem; font-weight:700; color:var(--text-main); font-family:'DM Mono',monospace;">{custom_prot}</div>
+            <div style="font-size:0.7rem; color:var(--text-muted);">g/day (range {prot_min}–{prot_max})</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    new_prot = st.number_input("Custom Protein Target (g)", min_value=50, max_value=300,
-                               value=st.session_state['protein_custom'], step=5)
+    new_prot = st.number_input("Custom Protein Target (g)", min_value=prot_min, max_value=prot_max,
+                               value=custom_prot, step=1)
     if new_prot != st.session_state['protein_custom']:
         st.session_state['protein_custom'] = new_prot
         st.query_params.protein_custom = str(new_prot)
@@ -1737,55 +1744,53 @@ elif app_view == "Nutrition":
         st.info("Need at least 3 body weight + 5 composition entries for adaptive feedback.")
 
 # ══════════════════════════════════════════════════════════════
-# WORKOUT TAB (REDESIGNED – PER‑SET ROWS, NO +/- BUTTONS)
+# WORKOUT TAB (AUTO‑RECALL & DESCRIPTIVE LABELS)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Workout":
     header_placeholder.empty()
 
-    # Templates: (exercise, default_weight, default_sets)
-    UPPER1 = [
-        ("DB Press (45°)", 20, 2),
-        ("Incline Chest Press Machine", 22.5, 2),
-        ("Assisted Pullup", -18, 2),
-        ("Single Hand Seated Row", 20, 2),
-        ("Side Delt Flys", 2.3, 2),
-        ("Cross-Body Cable Tricep Ext", 6.8, 2)
-    ]
-    LOWER1 = [
-        ("Barbell Squat", 70, 2),
-        ("Leg Press", 0, 2),
-        ("Leg Extensions", -39, 2),
-        ("Leg Curls", 52, 2),
-        ("Standing Calf Raises", 10, 2),
-        ("Abs Rope", 30, 2)
-    ]
-    UPPER2 = [
-        ("Lat Pulldown", 45, 2),
-        ("Shoulder Press Machine", 10, 2),
-        ("Upper Back Row", 10, 2),
-        ("Pec Deck Fly", None, 2),
-        ("Brachialis Rope Curl", 11.3, 2),
-        ("Overhead Tricep Ext", 9, 2)
-    ]
-    LOWER2 = [
-        ("RDLs", 40, 2),
-        ("Barbell Squat", 75, 2),
-        ("Seated or Lying Hamstring Curls", 59, 2),
-        ("45° Hyperextension", 10, 2),
-        ("Calf Raises", 35, 2),
-        ("Abs Rope", 45, 2)
-    ]
-    templates = {
-        "Upper 1": UPPER1,
-        "Lower 1": LOWER1,
-        "Upper 2": UPPER2,
-        "Lower 2": LOWER2
+    # Templates with descriptive labels
+    templates_display = {
+        "Upper 1 (Chest / Horizontal Focus)": [
+            ("DB Press (45°)", 20, 2),
+            ("Incline Chest Press Machine", 22.5, 2),
+            ("Assisted Pullup", -18, 2),
+            ("Single Hand Seated Row", 20, 2),
+            ("Side Delt Flys", 2.3, 2),
+            ("Cross-Body Cable Tricep Ext", 6.8, 2)
+        ],
+        "Lower 1 (Quad Dominant)": [
+            ("Barbell Squat", 70, 2),
+            ("Leg Press", 0, 2),
+            ("Leg Extensions", -39, 2),
+            ("Leg Curls", 52, 2),
+            ("Standing Calf Raises", 10, 2),
+            ("Abs Rope", 30, 2)
+        ],
+        "Upper 2 (Back / Vertical Focus)": [
+            ("Lat Pulldown", 45, 2),
+            ("Shoulder Press Machine", 10, 2),
+            ("Upper Back Row", 10, 2),
+            ("Pec Deck Fly", None, 2),
+            ("Brachialis Rope Curl", 11.3, 2),
+            ("Overhead Tricep Ext", 9, 2)
+        ],
+        "Lower 2 (Posterior Chain Dominant)": [
+            ("RDLs", 40, 2),
+            ("Barbell Squat", 75, 2),
+            ("Seated or Lying Hamstring Curls", 59, 2),
+            ("45° Hyperextension", 10, 2),
+            ("Calf Raises", 35, 2),
+            ("Abs Rope", 45, 2)
+        ]
     }
 
-    workout_type = st.selectbox("Workout", list(templates.keys()))
-    exercises = templates[workout_type]
+    chosen_label = st.selectbox("Workout", list(templates_display.keys()))
+    exercises = templates_display[chosen_label]
+    # Extract internal workout type key (e.g., "Upper 1") for saving to sheet
+    workout_type_key = chosen_label.split(" (")[0]
 
-    # Load previous data for weight auto-fill
+    # Load workout history for auto‑recall
     w_df = load_workout_data(st.session_state['sheet_url'])
     if not w_df.empty:
         last_date = w_df['Date'].max().strftime('%d %b %Y')
@@ -1798,23 +1803,38 @@ elif app_view == "Workout":
         data_to_log = []
         for ex_name, def_weight, def_sets in exercises:
             st.markdown(f"**{ex_name}**")
-            # Pre-fill weight from history
+            # Auto‑recall: last weight, sets, and reps per set from history
             if not w_df.empty:
                 ex_hist = w_df[w_df['Exercise'] == ex_name]
-                last_weight = ex_hist['Weight'].values[0] if not ex_hist.empty else def_weight
-                if last_weight is None or last_weight == 0:
-                    last_weight = def_weight if def_weight else 0.0
+                if not ex_hist.empty:
+                    # Get the most recent date for this exercise
+                    last_ex_date = ex_hist['Date'].max()
+                    last_session = ex_hist[ex_hist['Date'] == last_ex_date].sort_values('Set')
+                    last_weight = last_session['Weight'].values[0] if not last_session.empty else def_weight
+                    last_sets = last_session['Set'].max() if not last_session.empty else def_sets
+                    last_reps = [last_session[last_session['Set'] == s+1]['Reps'].values[0] if not last_session[last_session['Set'] == s+1].empty else 0 for s in range(last_sets)]
+                else:
+                    last_weight = def_weight
+                    last_sets = def_sets
+                    last_reps = [0] * last_sets
             else:
                 last_weight = def_weight if def_weight else 0.0
+                last_sets = def_sets
+                last_reps = [0] * last_sets
 
-            weight = st.number_input(f"{ex_name} Weight (kg)", value=float(last_weight),
-                                     step=0.5, key=f"w_{ex_name}_{workout_type}")
-            sets = st.number_input(f"Number of sets", min_value=1, max_value=8, value=def_sets,
-                                   key=f"nsets_{ex_name}_{workout_type}")
+            # Convert None to 0 for safety
+            last_weight = float(last_weight) if last_weight is not None else 0.0
+
+            weight = st.number_input(f"{ex_name} Weight (kg)", value=last_weight,
+                                     step=0.5, key=f"w_{ex_name}_{chosen_label}")
+            sets = st.number_input(f"Number of sets", min_value=1, max_value=8, value=last_sets,
+                                   key=f"nsets_{ex_name}_{chosen_label}")
+            # Ensure reps list is long enough for current sets value
             reps = []
             for s in range(sets):
-                rep_val = st.number_input(f"Set {s+1} reps", min_value=0, value=0,
-                                          key=f"rep_{ex_name}_{s}_{workout_type}")
+                default_rep = last_reps[s] if s < len(last_reps) else 0
+                rep_val = st.number_input(f"Set {s+1} reps", min_value=0, value=default_rep,
+                                          key=f"rep_{ex_name}_{s}_{chosen_label}")
                 reps.append(rep_val)
             data_to_log.append((ex_name, weight, reps))
             st.markdown("---")
@@ -1827,7 +1847,7 @@ elif app_view == "Workout":
                     if r > 0:
                         rows.append([
                             workout_date.strftime('%Y-%m-%d'),
-                            workout_type,
+                            workout_type_key,   # use stripped key
                             ex_name,
                             weight,
                             set_idx+1,
@@ -1839,7 +1859,7 @@ elif app_view == "Workout":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# SETTINGS TAB (NO BODY EDITING, ONLY ACTIVITY & PREFERENCES)
+# SETTINGS TAB (no body editing, activity & preferences only)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
     header_placeholder.empty()
