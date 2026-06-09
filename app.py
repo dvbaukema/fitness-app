@@ -13,24 +13,39 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 # ══════════════════════════════════════════════════════════════
-# PAGE CONFIG
+# PAGE CONFIG & WORKOUT DATABASE
 # ══════════════════════════════════════════════════════════════
-st.set_page_config(
-    page_title="METRICS | Alpha 1",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="METRICS | Beta 2", layout="centered", initial_sidebar_state="collapsed")
+
+ROUTINES = {
+    "Upper Body 1 (Chest & Horiz)": [
+        "DB Press (45°) [2x8-10]", "Incline Chest Press machine [2x8-10]", "Assisted Pullup [2x10-12]", 
+        "Single Hand Seated Row [2x8-10]", "Side Delt Flys [2xFail]", "Cross-Body Cable Tricep Ext [2x12-15]"
+    ],
+    "Lower Body 1 (Quad-Dominant)": [
+        "Barbell Squat [2x3-5]", "Leg Press/Hack Squat [2x8-10]", "Leg Extensions [2xFail]", 
+        "Leg Curls [2x10-12]", "Standing Calf Raises [2x12-20]", "Abs Rope [2xFail]"
+    ],
+    "Upper Body 2 (Back & Vert)": [
+        "Lat Pulldown [2x10-12]", "Shoulder Press Machine [2x8-10]", "Upper Back Row [2x12-15]", 
+        "Pec Deck Fly / Cable Cross [2x10-15]", "Brachialis Rope Curl [2x12-15]", "Overhead Tricep Ext [2x12-15]"
+    ],
+    "Lower Body 2 (Posterior)": [
+        "RDLs [2x10-12]", "Barbell Squat [2x3-5]", "Seated/Lying Hamstring Curls [2x10-12]", 
+        "45 Degree Hyperextension [2x10-12]", "Calf Raises [2x12-20]", "Abs Rope [2xFail]"
+    ]
+}
 
 def system_alert(message, kind="ok"):
-    bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
+    bg = "#10B981" if kind == "ok" else "#EF4444"
     ph = st.empty()
-    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:#FFFFFF; padding:14px 36px; border-radius:100px; font-weight:800; font-family:\"DM Sans\", sans-serif; z-index:99999; box-shadow: 0 8px 32px rgba(0,0,0,0.25); text-transform:uppercase; letter-spacing:2px; font-size: 0.78rem;'>{message}</div>"
     ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
 
 # ══════════════════════════════════════════════════════════════
-# PROTOCOL TARGETS
+# HARDCODED PROTOCOL TARGETS
 # ══════════════════════════════════════════════════════════════
 DEFAULT_PROFILES = {
     "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
@@ -40,21 +55,23 @@ DEFAULT_PROFILES = {
     "Aggressive Bulk": {'Weight (kg)': [2.5, 2.0, 3.5],    'Muscle Mass (kg)': [0.8, 0.5],   'Body Fat (%)': [0.6, 0.3, 1.0]},
 }
 
+ACTIVITY_MULTIPLIERS = {"Sedentary (Office job)": 1.2, "Light (1-3 days/wk)": 1.375, "Moderate (3-5 days/wk)": 1.55, "Active (6-7 days/wk)": 1.725, "Athlete (2x/day)": 1.9}
+
 # ══════════════════════════════════════════════════════════════
-# LOCALSTORAGE SYNC SCRIPT
+# AUTO‑LOGIN & PERMANENT STORAGE ENGINE (localStorage)
 # ══════════════════════════════════════════════════════════════
 st.markdown("""
 <script>
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
-    function sync(key) {
-        const saved = localStorage.getItem('metrics_' + key);
-        if (saved && !urlParams.has(key)) { urlParams.set(key, saved); redirect = true; }
-        else if (urlParams.has(key)) { localStorage.setItem('metrics_' + key, urlParams.get(key)); }
-    }
-    sync('user'); sync('goal'); sync('start'); sync('end'); sync('theme');
-    sync('activity'); sync('protein_custom'); sync('calorie_offset');
+    const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset'];
+    keys.forEach(k => {
+        const sk = 'metrics_' + k;
+        const val = localStorage.getItem(sk);
+        if (val && !urlParams.has(k)) { urlParams.set(k, val); redirect = true; }
+        else if (urlParams.has(k)) { localStorage.setItem(sk, urlParams.get(k)); }
+    });
     if (redirect) window.location.replace(window.location.origin + window.location.pathname + '?' + urlParams.toString());
 })();
 </script>
@@ -71,8 +88,7 @@ def get_google_sheets_service():
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         return build('sheets', 'v4', credentials=creds)
-    except Exception:
-        return None
+    except Exception: return None
 
 def extract_sheet_id(url):
     if not url: return None
@@ -87,24 +103,20 @@ def read_sheet_range(sheet_url, range_name):
         res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
         vals = res.get('values', [])
         if len(vals) < 2: return pd.DataFrame()
-        headers = vals[0]; data = vals[1:]
-        return pd.DataFrame(data, columns=headers)
-    except HttpError:
-        return pd.DataFrame()
+        return pd.DataFrame(vals[1:], columns=vals[0])
+    except HttpError: return pd.DataFrame()
 
 def append_to_sheet(sheet_url, range_name, values):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        body = {'values': values}
         service.spreadsheets().values().append(
             spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body
+            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body={'values': values}
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 def overwrite_sheet_range(sheet_url, range_name, df):
     service = get_google_sheets_service()
@@ -113,40 +125,32 @@ def overwrite_sheet_range(sheet_url, range_name, df):
     try:
         service.spreadsheets().values().clear(spreadsheetId=sheet_id, range=range_name).execute()
         values = [df.columns.tolist()] + df.values.tolist()
-        body = {'values': values}
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', body=body
+            valueInputOption='USER_ENTERED', body={'values': values}
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 # ══════════════════════════════════════════════════════════════
-# SHEET‑SPECIFIC HELPERS
+# SHEET‑SPECIFIC DATA LOADERS
 # ══════════════════════════════════════════════════════════════
 def load_body_constants(sheet_url):
-    df = read_sheet_range(sheet_url, 'Body!A1:C2')
-    if df.empty:
-        return {'height': 180, 'gender': 'male', 'age': 25}
+    df = read_sheet_range(sheet_url, 'Body!A:C')
+    if df.empty: return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
-        h = int(float(df.iloc[0,0])) if not df.empty else 180
-        g = df.iloc[0,1].strip().lower() if df.shape[1]>1 else 'male'
-        a = int(float(df.iloc[0,2])) if df.shape[1]>2 else 25
+        row = df.iloc[0]
+        h = float(row.get('Height', 180))
+        g = str(row.get('Gender', 'male')).lower().strip()
+        a = int(float(row.get('Age', 25)))
         return {'height': h, 'gender': g, 'age': a}
-    except:
-        return {'height': 180, 'gender': 'male', 'age': 25}
+    except: return {'height': 180.0, 'gender': 'male', 'age': 25}
 
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
-    if df.empty:
-        return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-    if 'Time' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='mixed', errors='coerce')
-    else:
-        df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
-    for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
-        df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
+    if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
+    df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'] if 'Time' in df.columns else df['Date'], format='mixed', errors='coerce')
+    for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']: df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
 def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
@@ -161,13 +165,11 @@ def overwrite_body_sheet(sheet_url, df):
     return overwrite_sheet_range(sheet_url, 'Data!A:E', pd.DataFrame(values[1:], columns=values[0]))
 
 def load_workout_data(sheet_url):
-    df = read_sheet_range(sheet_url, 'Workout!A:F')
-    if df.empty:
-        return pd.DataFrame(columns=['Date','Workout Type','Exercise','Weight','Set','Reps'])
+    df = read_sheet_range(sheet_url, 'Workouts!A:F')
     expected = ['Date','Workout Type','Exercise','Weight','Set','Reps']
+    if df.empty: return pd.DataFrame(columns=expected)
     for c in expected:
-        if c not in df.columns:
-            df[c] = '' if c == 'Exercise' else np.nan
+        if c not in df.columns: df[c] = '' if c == 'Exercise' else np.nan
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Weight'] = pd.to_numeric(df['Weight'], errors='coerce')
     df['Set'] = pd.to_numeric(df['Set'], errors='coerce').fillna(1).astype(int)
@@ -175,36 +177,31 @@ def load_workout_data(sheet_url):
     return df[expected].dropna(subset=['Date','Exercise']).reset_index(drop=True)
 
 def append_workout_rows(sheet_url, rows):
-    for r in rows:
-        append_to_sheet(sheet_url, 'Workout!A:F', [r])
+    return append_to_sheet(sheet_url, 'Workouts!A:F', rows)
 
 # ══════════════════════════════════════════════════════════════
-# LOAD SECRETS & DIRECTORY
+# SECRETS DIRECTORY
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
-jurien_url = st.secrets.get("jurien_gsheets_url", "") # NEW
+jurien_url = st.secrets.get("jurien_gsheets_url", "")
 
 dan_key = st.secrets.get("daniel_user_key", "Daniel")
 bram_key = st.secrets.get("bram_user_key", "Bram")
-jurien_key = st.secrets.get("jurien_user_key", "Jurien") # NEW
+jurien_key = st.secrets.get("jurien_user_key", "Jurien")
 admin_key = st.secrets.get("admin_user_key", "Admin")
 
-# Registered Users Directory
 USER_DATA = {dan_key: dan_url, bram_key: bram_url, jurien_key: jurien_url}
 KEY_TO_LABEL = {dan_key: "Daniel", bram_key: "Bram", jurien_key: "Jurien"}
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
     "Intensity > Volume.",
-    "No man has the right to be an amateur in the matter of physical training. — Socrates",
     "Discipline equals freedom. — Jocko Willink",
     "It's not about perfect. It's about effort.",
     "The iron never lies. — Henry Rollins",
     "We are what we repeatedly do. Excellence, then, is not an act, but a habit. — Aristotle",
     "There is no reason to be alive and not be strong. — Socrates",
-    "If you want something you've never had, you must be willing to do something you've never done.",
-    "Strength does not come from winning. Your struggles develop your strengths.",
     "Nothing truly great ever came from a comfort zone."
 ]
 
@@ -223,736 +220,122 @@ if 'enable_achievements' not in st.session_state: st.session_state['enable_achie
 if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = datetime(2026, 3, 17).date()
 if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
-if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
-if 'theme_pref' not in st.session_state: st.session_state['theme_pref'] = st.query_params.get("theme", "System")
+qp = st.query_params
+st.session_state['current_goal'] = qp.get("goal", "Lean Bulk")
+st.session_state['theme_pref'] = qp.get("theme", "System")
+st.session_state['activity_level'] = qp.get("activity", "Moderate (3-5 days/wk)")
+st.session_state['calorie_offset'] = int(qp.get("calorie_offset", 0))
+st.session_state['protein_custom'] = int(qp.get("protein_custom", 160))
 
 if 'analysis_start_date' not in st.session_state:
-    default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
-    st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
+    st.session_state['analysis_start_date'] = pd.to_datetime(qp.get("start", (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d'))).date()
 if 'target_end_date' not in st.session_state:
-    st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", '2026-09-01')).date()
+    st.session_state['target_end_date'] = pd.to_datetime(qp.get("end", '2026-09-01')).date()
 
-if 'body_constants' not in st.session_state:
+if st.session_state['auth_status'] and 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
 
-if 'activity_level' not in st.session_state:
-    st.session_state['activity_level'] = st.query_params.get("activity", "moderate")
-if 'calorie_offset' not in st.session_state:
-    st.session_state['calorie_offset'] = int(st.query_params.get("calorie_offset", 0))
-if 'protein_custom' not in st.session_state:
-    st.session_state['protein_custom'] = int(st.query_params.get("protein_custom", 150))
-if 'nutrition_phase_start' not in st.session_state:
-    st.session_state['nutrition_phase_start'] = datetime.now().date()
-
-# Workout exercises
-if 'exercises' not in st.session_state:
-    st.session_state['exercises'] = [
-        {"Name": "DB Press (45°)", "Category": "Chest", "Muscle Group": "Upper Chest"},
-        {"Name": "Incline Chest Press Machine", "Category": "Chest", "Muscle Group": "Upper Chest"},
-        {"Name": "Assisted Pullup", "Category": "Back", "Muscle Group": "Lats"},
-        {"Name": "Single Hand Seated Row", "Category": "Back", "Muscle Group": "Lats/Mid Back"},
-        {"Name": "Side Delt Flys", "Category": "Shoulders", "Muscle Group": "Side Delts"},
-        {"Name": "Cross-Body Cable Tricep Ext", "Category": "Arms", "Muscle Group": "Triceps"},
-        {"Name": "Barbell Squat", "Category": "Legs", "Muscle Group": "Quads"},
-        {"Name": "Leg Press", "Category": "Legs", "Muscle Group": "Quads"},
-        {"Name": "Leg Extensions", "Category": "Legs", "Muscle Group": "Quads"},
-        {"Name": "Leg Curls", "Category": "Legs", "Muscle Group": "Hamstrings"},
-        {"Name": "Standing Calf Raises", "Category": "Legs", "Muscle Group": "Calves"},
-        {"Name": "Abs Rope", "Category": "Core", "Muscle Group": "Abs"},
-        {"Name": "Lat Pulldown", "Category": "Back", "Muscle Group": "Lats"},
-        {"Name": "Shoulder Press Machine", "Category": "Shoulders", "Muscle Group": "Front/Side Delts"},
-        {"Name": "Upper Back Row", "Category": "Back", "Muscle Group": "Upper Back"},
-        {"Name": "Pec Deck Fly", "Category": "Chest", "Muscle Group": "Chest"},
-        {"Name": "Brachialis Rope Curl", "Category": "Arms", "Muscle Group": "Brachialis"},
-        {"Name": "Overhead Tricep Ext", "Category": "Arms", "Muscle Group": "Triceps"},
-        {"Name": "RDLs", "Category": "Legs", "Muscle Group": "Hamstrings/Glutes"},
-        {"Name": "45° Hyperextension", "Category": "Legs", "Muscle Group": "Glutes/Lower Back"},
-    ]
-
 # ══════════════════════════════════════════════════════════════
-# CSS (step buttons visible again)
+# CSS THEMES
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
-  --bg-primary: #F0EDE8;
-  --bg-secondary: #E8E4DD;
-  --text-main: #1A1A1A;
-  --text-muted: #6B6560;
-  --text-subtle: #A09890;
-  --surface: #FAFAF8;
-  --surface-hover: #F0EDE8;
-  --surface-active: #E8E4DD;
-  --border: rgba(0,0,0,0.08);
-  --border-strong: rgba(0,0,0,0.15);
-  --c-emerald: #059669;
-  --c-emerald-bg: rgba(5, 150, 105, 0.1);
-  --c-amber: #D97706;
-  --c-amber-bg: rgba(217, 119, 6, 0.1);
-  --c-rose: #DC2626;
-  --c-rose-bg: rgba(220, 38, 38, 0.1);
-  --c-blue: #2563EB;
-  --c-blue-bg: rgba(37, 99, 235, 0.1);
-  --c-blue-soft: rgba(37, 99, 235, 0.15);
+  --bg-primary: #F0EDE8; --bg-secondary: #E8E4DD; --text-main: #1A1A1A; --text-muted: #6B6560; --text-subtle: #A09890;
+  --surface: #FAFAF8; --surface-hover: #F0EDE8; --surface-active: #E8E4DD;
+  --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+  --c-emerald: #059669; --c-emerald-bg: rgba(5, 150, 105, 0.1);
+  --c-amber: #D97706; --c-amber-bg: rgba(217, 119, 6, 0.1);
+  --c-rose: #DC2626; --c-rose-bg: rgba(220, 38, 38, 0.1);
+  --c-blue: #2563EB; --c-blue-bg: rgba(37, 99, 235, 0.1); --c-blue-soft: rgba(37, 99, 235, 0.15);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 10px 30px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
-  --nav-bg: rgba(240, 237, 232, 0.85);
-  --nav-pill: #1A1A1A;
-  --nav-pill-text: #FAFAF8;
-  --nav-text: #6B6560;
-  --input-bg: #FAFAF8;
-  --input-text: #1A1A1A;
+  --nav-bg: rgba(240, 237, 232, 0.85); --nav-pill: #1A1A1A; --nav-pill-text: #FAFAF8; --nav-text: #6B6560;
+  --input-bg: #FAFAF8; --input-text: #1A1A1A;
 """
 css_dark_vars = """
-  --bg-primary: #0F0F0F;
-  --bg-secondary: #181818;
-  --text-main: #F0EDE8;
-  --text-muted: rgba(240,237,232,0.55);
-  --text-subtle: rgba(240,237,232,0.3);
-  --surface: #1C1C1C;
-  --surface-hover: #222222;
-  --surface-active: #282828;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.14);
-  --c-emerald: #10B981;
-  --c-emerald-bg: rgba(16, 185, 129, 0.12);
-  --c-amber: #F59E0B;
-  --c-amber-bg: rgba(245, 158, 11, 0.12);
-  --c-rose: #F87171;
-  --c-rose-bg: rgba(248, 113, 113, 0.12);
-  --c-blue: #60A5FA;
-  --c-blue-bg: rgba(96, 165, 250, 0.12);
-  --c-blue-soft: rgba(96, 165, 250, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
-  --nav-bg: rgba(15, 15, 15, 0.88);
-  --nav-pill: #F0EDE8;
-  --nav-pill-text: #0F0F0F;
-  --nav-text: rgba(240,237,232,0.5);
-  --input-bg: #1C1C1C;
-  --input-text: #F0EDE8;
+  --bg-primary: #0F0F0F; --bg-secondary: #181818; --text-main: #F0EDE8; --text-muted: rgba(240,237,232,0.55); --text-subtle: rgba(240,237,232,0.3);
+  --surface: #1C1C1C; --surface-hover: #222222; --surface-active: #282828;
+  --border: rgba(255,255,255,0.07); --border-strong: rgba(255,255,255,0.14);
+  --c-emerald: #10B981; --c-emerald-bg: rgba(16, 185, 129, 0.12);
+  --c-amber: #F59E0B; --c-amber-bg: rgba(245, 158, 11, 0.12);
+  --c-rose: #F87171; --c-rose-bg: rgba(248, 113, 113, 0.12);
+  --c-blue: #60A5FA; --c-blue-bg: rgba(96, 165, 250, 0.12); --c-blue-soft: rgba(96, 165, 250, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --nav-bg: rgba(15, 15, 15, 0.88); --nav-pill: #F0EDE8; --nav-pill-text: #0F0F0F; --nav-text: rgba(240,237,232,0.5);
+  --input-bg: #1C1C1C; --input-text: #F0EDE8;
 """
 
-if st.session_state['theme_pref'] == "Dark":
-    theme_block = f":root {{{css_dark_vars}}}"
-elif st.session_state['theme_pref'] == "Light":
-    theme_block = f":root {{{css_light_vars}}}"
-else:
-    theme_block = f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}"
+theme_block = f":root {{{css_dark_vars}}}" if st.session_state['theme_pref'] == "Dark" else (f":root {{{css_light_vars}}}" if st.session_state['theme_pref'] == "Light" else f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}")
 
 css = theme_block + """
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; }
-
-.stApp {
-  background: var(--bg-primary) !important;
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-.block-container {
-  padding-top: 1.5rem !important;
-  padding-bottom: 6rem !important;
-  max-width: 580px !important;
-}
-
+.stApp { background: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; }
+.block-container { padding-top: 1.5rem !important; padding-bottom: 6rem !important; max-width: 580px !important; }
 #MainMenu, footer, header { display: none !important; }
 
-.app-bar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-}
-.wordmark {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: var(--text-main);
-  letter-spacing: -1.5px;
-  line-height: 1;
-}
-.tagline {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--text-subtle);
-  margin-top: 5px;
-  letter-spacing: 0.5px;
-}
-.live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--c-emerald-bg);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 100px;
-  padding: 5px 12px;
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  color: var(--c-emerald);
-  font-weight: 600;
-  letter-spacing: 1.5px;
-}
-.live-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-emerald);
-  animation: pulse 2s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.7); }
-}
+.s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
+.settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
+.app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
+.wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
+.tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.5px; }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--c-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 100px; padding: 5px 12px; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1.5px; }
 
-div[role="radiogroup"] {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 2.5rem;
-    margin-top: -0.5rem;
-    background: transparent !important;
-}
-div[role="radiogroup"] > label {
-    background: var(--surface) !important;
-    border: 1px solid var(--border-strong) !important;
-    border-radius: 100px !important;
-    padding: 8px 18px !important;
-    margin: 0 !important;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
-}
-div[role="radiogroup"] > label:hover {
-    border-color: var(--text-muted) !important;
-    transform: translateY(-1px);
-}
-div[role="radiogroup"] > label[data-checked="true"] {
-    background: var(--nav-pill) !important;
-    border-color: var(--nav-pill) !important;
-    box-shadow: var(--shadow-md);
-}
-div[role="radiogroup"] > label div {
-    color: var(--text-muted) !important;
-    font-weight: 600 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.85rem !important;
-    letter-spacing: 0.5px !important;
-}
-div[role="radiogroup"] > label[data-checked="true"] div {
-    color: var(--nav-pill-text) !important;
-    font-weight: 800 !important;
-}
-div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
+div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
+div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 6px 14px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; transform: translateY(-1px); }
+div[role="radiogroup"] > label[data-checked="true"] { background: var(--nav-pill) !important; border-color: var(--nav-pill) !important; box-shadow: var(--shadow-md); }
+div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.75rem !important; letter-spacing: 0.5px !important; }
+div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 800 !important; }
+div[role="radiogroup"] span[data-baseweb="radio"], div[data-testid="stSegmentedControl"] { display: none !important; }
 div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 
-/* Hide regular segmented controls if they render */
-div[data-testid="stSegmentedControl"] { display: none !important; }
+.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
+.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); }
+.mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
+.mini-val { font-family: 'DM Mono', monospace; font-size: 1.55rem; font-weight: 600; color: var(--text-main); line-height: 1; display: inline-block;}
+.mini-unit { font-size: 0.65rem; color: var(--text-subtle); margin-left: 2px; font-weight: 400;}
+.mini-sub { font-family: 'DM Mono', monospace; font-size: 0.65rem; font-weight: 600; margin-top: 8px; display: block; letter-spacing: 0.5px;}
 
-.s-head {
-  font-family: 'DM Mono', monospace !important;
-  font-size: 0.65rem;
-  letter-spacing: 2.5px;
-  color: var(--text-subtle);
-  margin: 2rem 0 1rem;
-  font-weight: 500;
-  text-transform: uppercase;
-}
+.c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; }
 
-.settings-lbl {
-  font-family: 'DM Sans', sans-serif !important;
-  font-size: 0.85rem;
-  color: var(--text-main);
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  letter-spacing: 1px;
-}
-
-.quote-box {
-  text-align: center;
-  padding: 1.2rem 1.4rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  margin-bottom: 1.75rem;
-  box-shadow: var(--shadow-sm);
-}
-.quote-text {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  font-style: italic;
-  font-weight: 400;
-  line-height: 1.6;
-  letter-spacing: 0.1px;
-}
-
-.mini-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 1.75rem;
-}
-.mini-cell {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.1rem 1rem;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease;
-}
-.mini-cell:hover { box-shadow: var(--shadow-md); }
-.mini-lbl {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  color: var(--text-subtle);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 8px;
-  display: block;
-}
-.mini-val {
-  font-family: 'DM Mono', monospace;
-  font-size: 1.55rem;
-  font-weight: 600;
-  color: var(--text-main);
-  line-height: 1;
-  display: inline-block;
-}
-.mini-unit {
-  font-size: 0.65rem;
-  color: var(--text-subtle);
-  margin-left: 2px;
-  font-weight: 400;
-}
-.mini-sub {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.65rem;
-  font-weight: 600;
-  margin-top: 8px;
-  display: block;
-  letter-spacing: 0.5px;
-}
-
-.c-ok  { color: var(--c-emerald) !important; }
-.c-wrn { color: var(--c-amber) !important; }
-.c-err { color: var(--c-rose) !important; }
-.c-neu { color: var(--text-muted) !important; }
-.c-blue { color: var(--c-blue) !important; }
-
-.chart-blk {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 1.2rem;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow-sm);
-}
-.chart-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 4px;
-}
-.t-chip {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  padding: 4px 9px;
-  border-radius: 100px;
-  font-weight: 600;
-  display: inline-block;
-  letter-spacing: 0.5px;
-}
+.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
+.chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.t-chip { font-family: 'DM Mono', monospace; font-size: 0.58rem; padding: 4px 9px; border-radius: 100px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;}
 .t-chip.c-ok  { background: var(--c-emerald-bg); color: var(--c-emerald) !important; }
 .t-chip.c-wrn { background: var(--c-amber-bg); color: var(--c-amber) !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
 
-.hud-card {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 1rem 1.1rem;
-  border-radius: 16px;
-  margin-bottom: 0.6rem;
-  box-shadow: var(--shadow-sm);
-}
-.hud-icon {
-  font-size: 1.1rem;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: var(--surface-active);
-  flex-shrink: 0;
-  line-height: 1;
-}
-.hud-title {
-  font-size: 0.78rem;
-  color: var(--text-main);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 3px;
-}
-.hud-desc {
-  font-size: 0.76rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
+.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
+.hud-icon { font-size: 1.1rem; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; }
+.hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+.hud-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
 
 .tj-blk { margin-bottom: 2.2rem; }
-.tj-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  align-items: flex-end;
-}
-.tj-nm {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-}
-.bar-tk {
-  height: 20px;
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 8px;
-  position: relative;
-}
-.bar-pin {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 3px;
-  background: var(--text-main);
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 12px rgba(255,255,255,0.3);
-  z-index: 5;
-  transform: translateX(-50%);
-  border-radius: 2px;
-}
-.tj-st {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  display: block;
-  margin-top: 8px;
-}
+.tj-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: flex-end; }
+.tj-nm { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; }
+.bar-tk { height: 20px; border-radius: 10px; overflow: hidden; margin-bottom: 8px; position: relative; }
+.bar-pin { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--text-main); box-shadow: 0 0 0 2px var(--bg-primary), 0 0 12px rgba(255,255,255,0.3); z-index: 5; transform: translateX(-50%); border-radius: 2px; }
+.tj-st { font-family: 'DM Mono', monospace; font-size: 0.58rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; display: block; margin-top: 8px; }
 
-.tier-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  margin-bottom: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-.tier-item.completed {
-  background: var(--c-blue-bg);
-  border-color: rgba(96,165,250,0.25);
-}
-.tier-item.completed .tier-name { color: var(--c-blue); }
-.tier-item.current {
-  background: var(--c-blue-soft);
-  border-color: var(--c-blue);
-  box-shadow: 0 4px 20px rgba(96,165,250,0.15);
-}
-.tier-item.locked { opacity: 0.35; }
-.tier-emoji {
-  font-size: 1.4rem;
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-active);
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-.tier-details { flex-grow: 1; }
-.tier-name {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--text-main);
-  margin-bottom: 2px;
-}
-.tier-req {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--text-subtle);
-  letter-spacing: 0.5px;
-}
-.prog-tk {
-  height: 5px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 10px;
-}
-.prog-fill {
-  height: 100%;
-  background: var(--c-blue);
-  border-radius: 3px;
-  transition: width 0.6s ease;
-}
+.hist-row { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; box-shadow: var(--shadow-sm); transition: box-shadow 0.15s ease; }
+.hist-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; width: 100%; align-items: center; gap: 10px; }
+.hist-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; padding: 0 16px; margin-bottom: 8px; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+.hist-date { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--text-subtle); font-weight: 500; letter-spacing: 0.5px; }
+.hist-vals { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text-main); font-weight: 600; text-align: right; }
+.del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+.del-btn button:hover { color: var(--c-rose) !important; }
 
-.hist-row {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s ease;
-}
-.hist-row:hover { box-shadow: var(--shadow-md); }
-.hist-date {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.68rem;
-  color: var(--text-subtle);
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-.hist-vals {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.8rem;
-  color: var(--text-main);
-  font-weight: 600;
-}
-.hist-sep {
-  color: var(--border-strong);
-  margin: 0 6px;
-  font-weight: 300;
-}
-.del-btn button {
-    background: transparent !important;
-    border: none !important;
-    color: var(--text-subtle) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 1px !important;
-    text-transform: uppercase !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-}
-.del-btn button:hover {
-    color: var(--c-rose) !important;
-}
+div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
 
-.alert-banner {
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 1rem;
-  letter-spacing: 0.5px;
-}
-.alert-banner.warn {
-  background: var(--c-amber-bg);
-  border: 1px solid rgba(217,119,6,0.2);
-  color: var(--c-amber);
-}
-.alert-banner.danger {
-  background: var(--c-rose-bg);
-  border: 1px solid rgba(220,38,38,0.2);
-  color: var(--c-rose);
-}
-.alert-banner.info {
-  background: var(--c-blue-bg);
-  border: 1px solid rgba(37,99,235,0.2);
-  color: var(--c-blue);
-}
+div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
+div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
+div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; }
 
-div[data-testid="stSlider"] label {
-  font-family: 'DM Mono', monospace !important;
-  font-size: 0.65rem !important;
-  color: var(--text-subtle) !important;
-  text-transform: uppercase !important;
-  font-weight: 500 !important;
-  letter-spacing: 1.5px !important;
-}
-div[data-testid="stSlider"] > div > div > div {
-  height: 10px !important;
-  border-radius: 5px !important;
-  background: var(--surface-active) !important;
-}
-div[data-testid="stSlider"] div[role="slider"] {
-  width: 22px !important;
-  height: 22px !important;
-  background: var(--text-main) !important;
-  border: 3px solid var(--bg-primary) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-
-div[data-testid="stSelectbox"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  color: var(--input-text) !important;
-  min-height: 3.2rem !important;
-  box-shadow: var(--shadow-sm) !important;
-}
-div[data-testid="stSelectbox"] div[class*="singleValue"] {
-  color: var(--input-text) !important;
-  font-weight: 600 !important;
-  font-family: 'DM Sans', sans-serif !important;
-}
-div[data-testid="stSelectbox"] [class*="placeholder"] {
-  color: var(--text-muted) !important;
-}
-div[data-testid="stSelectbox"] [class*="menu"] {
-  background: var(--surface) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-}
-div[data-testid="stSelectbox"] [class*="option"] {
-  color: var(--input-text) !important;
-  background: transparent !important;
-}
-div[data-testid="stSelectbox"] [class*="option"]:hover {
-  background: var(--surface-active) !important;
-}
-
-div[data-testid="stTextInput"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  min-height: 3rem !important;
-}
-div[data-testid="stTextInput"] input {
-  color: var(--input-text) !important;
-  font-family: 'DM Mono', monospace !important;
-  font-size: 1rem !important;
-  text-align: center !important;
-  background: transparent !important;
-}
-
-div[data-testid="stForm"] button, .stButton > button {
-  background: var(--text-main) !important;
-  color: var(--bg-primary) !important;
-  font-family: 'DM Sans', sans-serif !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  border: none !important;
-  border-radius: 100px !important;
-  padding: 1rem !important;
-  margin-top: 1.5rem !important;
-  text-transform: uppercase !important;
-  letter-spacing: 2px !important;
-  box-shadow: var(--shadow-md) !important;
-  transition: all 0.2s ease !important;
-}
-div[data-testid="stForm"] button:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: var(--shadow-lg) !important;
-}
-
-.stButton > button {
-  background: var(--surface) !important;
-  color: var(--text-main) !important;
-  font-family: 'DM Sans', sans-serif !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 100px !important;
-  padding: 0.6rem 1.2rem !important;
-  margin-top: 0 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 1.5px !important;
-  box-shadow: var(--shadow-sm) !important;
-  transition: all 0.2s ease !important;
-}
-.stButton > button:hover {
-  background: var(--surface-active) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-
-div[data-testid="stDateInput"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  color: var(--input-text) !important;
-}
-div[data-testid="stDateInput"] input {
-  color: var(--input-text) !important;
-}
-
-div[data-testid="stToggle"] label p {
-  color: var(--text-main) !important;
-  font-size: 0.85rem !important;
-}
-
-div[data-testid="stExpander"] {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  overflow: hidden;
-}
-div[data-testid="stExpander"] summary p {
-  color: var(--text-main) !important;
-  font-size: 0.82rem !important;
-  font-weight: 600 !important;
-}
-div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
-  color: var(--text-main) !important;
-}
-
-/* Spinner steppers hidden */
-button[aria-label="Step down"], button[aria-label="Step up"],
-button[title="Step down"], button[title="Step up"] {
-  display: none !important;
-}
-
-/* Streamlit error/info messages */
-div[data-testid="stAlert"] {
-  border-radius: 12px !important;
-}
-
-/* Protocol selector center label */
-div[data-testid="stSelectbox"] > div > div {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-  width: 100% !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-div[data-testid="stSelectbox"] div[class*="singleValue"] {
-  text-align: center !important;
-  margin: 0 auto !important;
-  position: absolute;
-  left: 0;
-  right: 0;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+div[data-testid="stForm"] button, .stButton > button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; }
+div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
@@ -975,25 +358,6 @@ if not st.session_state['auth_status']:
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
-# ══════════════════════════════════════════════════════════════
-def sgn(v): return "+" if v > 0 else ""
-def dclass(v, invert=False): return "c-ok" if (v > 0 and not invert) or (v < 0 and invert) else ("c-err" if v != 0 else "c-neu")
-
-def eval_metric(metric, actual, profile, mmt=None, bft=None):
-    tgt, lower, upper = profile[metric] if len(profile[metric]) == 3 else (profile[metric][0], profile[metric][1], float('inf'))
-    if metric == 'Weight (kg)' and mmt is not None and bft is not None:
-        if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2: return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
-        if actual < lower and mmt >= -0.2 and bft < lower: return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
-    if metric == 'Muscle Mass (kg)':
-        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
-        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
-        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
-    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
-    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
-    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
-
-# ══════════════════════════════════════════════════════════════
 # DATA LOADING
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
@@ -1013,6 +377,8 @@ METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '
 
 analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
+end_label = target_end_date.strftime('%b %d').upper()
+
 df_win = df[df['Date'] >= analysis_start].copy()
 has_w = len(df_window_full := df_win) >= 3 or len(df) >= 3
 has_c = len(df_window_full) >= 5 or len(df) >= 5
@@ -1052,6 +418,68 @@ if has_c:
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING
 # ══════════════════════════════════════════════════════════════
+def sgn(v): return "+" if v > 0 else ""
+def dclass(v, invert=False): return "c-ok" if (v > 0 and not invert) or (v < 0 and invert) else ("c-err" if v != 0 else "c-neu")
+
+def eval_metric(metric, actual, profile, mmt=None, bft=None):
+    tgt, lower, upper = profile[metric] if len(profile[metric]) == 3 else (profile[metric][0], profile[metric][1], float('inf'))
+    if metric == 'Weight (kg)' and mmt is not None and bft is not None:
+        if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2: return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
+        if actual < lower and mmt >= -0.2 and bft < lower: return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
+    if metric == 'Muscle Mass (kg)':
+        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
+        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
+        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
+    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
+    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
+    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
+
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
+    tgt_rate = profile[metric][0]
+    s = sgn(actual_rate); ts = sgn(tgt_rate)
+    c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
+    
+    is_smart_override = status in ['MUSCLE DRIVEN', 'FAT LOSS DRIVEN']
+    
+    max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]) if len(profile[metric]) > 2 else 0, abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
+    p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
+    p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
+    
+    if len(profile[metric]) > 2:
+        p_u = max(min(((profile[metric][2] + max_bound) / (2 * max_bound)) * 100, 100), 0)
+        b_html = f"<span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX {profile[metric][2]:.2f}</span>"
+    else:
+        b_html = f"<span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span>"
+        
+    bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'>{b_html}</div>"
+        
+    pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
+    pct = max(min(pct, 97), 3)
+    
+    c_g, c_o, c_r = "var(--c-emerald)", "var(--c-amber)", "var(--c-rose)"
+    bg_grad = f"linear-gradient(to right, {c_r} 0%, {c_r} {p_l}%, {c_o} {p_l}%, {c_o} {p_t}%, {c_g} {p_t}%, {c_g} 100%)" if metric == 'Muscle Mass (kg)' else f"linear-gradient(to right, {c_o} 0%, {c_o} {p_l}%, {c_g} {p_l}%, {c_g} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} 100%)"
+    if is_smart_override: bg_grad = f"linear-gradient(to right, {c_o} 0%, {c_o} {p_l}%, {c_g} {p_l}%, {c_g} 100%)" if status == 'MUSCLE DRIVEN' else f"linear-gradient(to right, {c_g} 0%, {c_g} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} 100%)"
+
+    return f"""
+    <div class='tj-blk'>
+      <div class='tj-row' style='margin-bottom:10px;'>
+        <span class='tj-nm'>{label}</span>
+        <div style='text-align:right;'>
+          <div style='font-family:\"DM Mono\", monospace; font-size:1.2rem; font-weight:700; color:var(--text-main); line-height:1;'>
+            {s}{actual_rate:.2f} <span style='font-size:0.65rem; color:var(--text-subtle); font-weight:400;'>{unit}</span>
+          </div>
+        </div>
+      </div>
+      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
+      {bounds_html}
+      <div class='tj-st {c_txt}'>{status}</div>
+    </div>"""
+
+def hud_card(kind, icon, title, desc):
+    color_map = {'c-ok': 'var(--c-emerald)', 'c-wrn': 'var(--c-amber)', 'c-err': 'var(--c-rose)', 'c-neu': 'var(--text-muted)'}
+    border_color = color_map.get(kind, 'var(--border)')
+    return f"<div class='hud-card' style='border-left: 3px solid {border_color};'><div class='hud-icon'>{icon}</div><div><div class='hud-title' style='color:{border_color};'>{title}</div><div class='hud-desc'>{desc}</div></div></div>"
+
 active_goal = st.session_state['current_goal']
 ideal_rates = DEFAULT_PROFILES.get(active_goal, DEFAULT_PROFILES['Lean Bulk'])
 
@@ -1060,7 +488,7 @@ app_view = st.radio("Nav", ["Entry", "Workouts", "Nutrition", "Trends", "Analysi
 
 header_ph.markdown(f"""
 <div class="app-bar">
-    <div><div class="wordmark">Metrics</div><div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 1</div></div>
+    <div><div class="wordmark">Metrics</div><div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 2</div></div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
 """, unsafe_allow_html=True)
@@ -1146,22 +574,24 @@ elif app_view == "Workouts":
                 st.error("Failed to save. Ensure you created a 'Workouts' tab in your Google Sheet!")
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION TAB
+# NUTRITION TAB (Dynamically calculated based on Body Tab Constants)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
     st.markdown('<div class="s-head" style="margin-top:0;">Targets & Coaching</div>', unsafe_allow_html=True)
     
     w_curr = df.iloc[-1]['Weight (kg)'] if len(df) > 0 else 75.0
-    h_curr = st.session_state['body_constants']['height']
-    a_curr = st.session_state['body_constants']['age']
+    h_curr = float(st.session_state['body_constants']['height'])
+    a_curr = int(st.session_state['body_constants']['age'])
     g_curr = st.session_state['body_constants']['gender']
     act_lvl = st.session_state['activity_level']
+    cal_offset = int(st.session_state['calorie_offset'])
+    custom_prot = int(st.session_state['protein_custom'])
     
     # Mifflin-St Jeor
     if g_curr == "male": bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) + 5
     else: bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) - 161
     
-    tdee = bmr * {"sedentary": 1.2, "lightly_active": 1.375, "moderate": 1.55, "very_active": 1.725, "athlete": 1.9}.get(act_lvl, 1.55)
+    tdee = bmr * ACTIVITY_MULTIPLIERS.get(act_lvl, 1.55)
     
     if "Aggressive Cut" in active_goal: cal_adj, pro_min, pro_max = -750, 2.0, 2.4
     elif "Lean Cut" in active_goal: cal_adj, pro_min, pro_max = -400, 2.0, 2.3
@@ -1170,19 +600,18 @@ elif app_view == "Nutrition":
     else: cal_adj, pro_min, pro_max = +500, 1.6, 1.9
     
     calc_cals = int(tdee + cal_adj)
-    target_cals = calc_cals + st.session_state['calorie_offset']
-    target_protein = st.session_state['protein_custom']
+    target_cals = calc_cals + cal_offset
     
     st.markdown(f"""
     <div class="mini-grid">
         <div class="mini-cell" style="grid-column: span 3; text-align:center;">
             <span class="mini-lbl">Daily Caloric Target</span>
             <span class="mini-val">{target_cals}<span class="mini-unit">kcal</span></span>
-            <div class="mini-sub c-neu">Est. Requirement: {calc_cals} kcal</div>
+            <div class="mini-sub c-neu">Baseline Estimate: {calc_cals} kcal</div>
         </div>
         <div class="mini-cell" style="grid-column: span 3; text-align:center;">
             <span class="mini-lbl">Daily Protein Target</span>
-            <span class="mini-val">{target_protein}<span class="mini-unit">g</span></span>
+            <span class="mini-val">{custom_prot}<span class="mini-unit">g</span></span>
             <div class="mini-sub c-neu">Protocol Range: {int(w_curr * pro_min)}g – {int(w_curr * pro_max)}g</div>
         </div>
     </div>
@@ -1342,7 +771,19 @@ elif app_view == "Data":
 # SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
-    st.markdown('<div class="settings-lbl" style="margin-top:0;">Nutrition Baseline</div>', unsafe_allow_html=True)
+    st.markdown('<div class="settings-lbl" style="margin-top:0;">Physiology (Read-Only)</div>', unsafe_allow_html=True)
+    bc = st.session_state['body_constants']
+    
+    st.markdown(f"""
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; justify-content:space-between; margin-bottom:1.5rem; font-family:'DM Mono', monospace; font-size:0.8rem;">
+        <div><b>Height:</b> {bc['height']} cm</div>
+        <div><b>Age:</b> {bc['age']} yrs</div>
+        <div><b>Gender:</b> {bc['gender'].capitalize()}</div>
+    </div>
+    <div style="font-size:0.6rem; color:var(--text-subtle); margin-top:-1rem; margin-bottom:1.5rem;"><i>* Edit these values directly in the 'Body' tab of your Google Sheet.</i></div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="settings-lbl" style="margin-top:0;">Nutrition Config</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1: 
         n_act = st.selectbox("Activity Level", list(ACTIVITY_MULTIPLIERS.keys()), index=list(ACTIVITY_MULTIPLIERS.keys()).index(st.session_state['activity_level']))
@@ -1359,8 +800,8 @@ elif app_view == "Settings":
 
     st.markdown('<div class="settings-lbl">Analysis Range</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    with c1: new_start = st.date_input("Start Date", value=st.session_state['analysis_start_date'])
-    with c2: new_end = st.date_input("Target Date", value=st.session_state['target_end_date'])
+    with c1: new_start = st.date_input("Trend Start", value=st.session_state['analysis_start_date'])
+    with c2: new_end = st.date_input("Target End", value=st.session_state['target_end_date'])
     if st.button("Save Dates", use_container_width=True):
         st.session_state['analysis_start_date'] = new_start
         st.session_state['target_end_date'] = new_end
