@@ -82,96 +82,64 @@ def get_google_sheets_service():
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         return build('sheets', 'v4', credentials=creds)
-    except Exception:
-        return None
+    except Exception: return None
 
 def extract_sheet_id(url):
     if not url: return None
     m = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
-    if m: return m.group(1)
-    if re.match(r'^[a-zA-Z0-9-_]{20,}$', url): return url
-    return None
+    return m.group(1) if m else (url if re.match(r'^[a-zA-Z0-9-_]{20,}$', url) else None)
 
 def read_sheet_range(sheet_url, range_name):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: 
-        return pd.DataFrame()
+    if not service or not sheet_id: return pd.DataFrame()
     try:
         res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
         vals = res.get('values', [])
-        if len(vals) < 2: 
-            return pd.DataFrame()
-        headers = vals[0]
-        data = vals[1:]
-        return pd.DataFrame(data, columns=headers)
-    except HttpError:
-        return pd.DataFrame()
+        if len(vals) < 2: return pd.DataFrame()
+        return pd.DataFrame(vals[1:], columns=vals[0])
+    except HttpError: return pd.DataFrame()
 
 def append_to_sheet(sheet_url, range_name, values):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: 
-        return False
+    if not service or not sheet_id: return False
     try:
-        body = {'values': values}
         service.spreadsheets().values().append(
             spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body
+            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body={'values': values}
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 def overwrite_sheet_range(sheet_url, range_name, df):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: 
-        return False
+    if not service or not sheet_id: return False
     try:
         service.spreadsheets().values().clear(spreadsheetId=sheet_id, range=range_name).execute()
-        values = [df.columns.tolist()] + df.values.tolist()
-        body = {'values': values}
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', body=body
+            valueInputOption='USER_ENTERED', body={'values': [df.columns.tolist()] + df.values.tolist()}
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
-# ══════════════════════════════════════════════════════════════
-# SHEET‑SPECIFIC HELPERS
-# ══════════════════════════════════════════════════════════════
 def load_body_constants(sheet_url):
     df = read_sheet_range(sheet_url, 'Body!A:C')
-    if df.empty:
-        return {'height': 180.0, 'gender': 'male', 'age': 25}
+    if df.empty: return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
         row = df.iloc[0]
-        h = float(row.get('Height', 180))
-        g = str(row.get('Gender', 'male')).lower().strip()
-        a = int(float(row.get('Age', 25)))
-        return {'height': h, 'gender': g, 'age': a}
-    except:
-        return {'height': 180.0, 'gender': 'male', 'age': 25}
+        return {'height': float(row.get('Height', 180)), 'gender': str(row.get('Gender', 'male')).lower().strip(), 'age': int(float(row.get('Age', 25)))}
+    except: return {'height': 180.0, 'gender': 'male', 'age': 25}
 
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
-    if df.empty:
-        return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-    
-    if 'Time' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-    else:
-        df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
-        
+    if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
+    if 'Time' in df.columns: df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
+    else: df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
     for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
-        if m in df.columns:
-            df[m] = pd.to_numeric(df[m], errors='coerce')
-        else:
-            df[m] = np.nan
-            
+        df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
 def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
@@ -183,12 +151,10 @@ def overwrite_body_sheet(sheet_url, df):
     for _, row in df.iterrows():
         d = pd.Timestamp(row['Date'])
         values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
-    
-    out_df = pd.DataFrame(values[1:], columns=values[0])
-    return overwrite_sheet_range(sheet_url, 'Data!A:E', out_df)
+    return overwrite_sheet_range(sheet_url, 'Data!A:E', pd.DataFrame(values[1:], columns=values[0]))
 
 # ══════════════════════════════════════════════════════════════
-# LOAD SECRETS & DIRECTORY
+# SECRETS DIRECTORY
 # ══════════════════════════════════════════════════════════════
 dan_url = st.secrets.get("daniel_gsheets_url", "")
 bram_url = st.secrets.get("bram_gsheets_url", "")
@@ -202,13 +168,11 @@ admin_key = st.secrets.get("admin_user_key", "Admin")
 USER_DATA = {dan_key: dan_url, bram_key: bram_url, jurien_key: jurien_url}
 KEY_TO_LABEL = {dan_key: "Daniel", bram_key: "Bram", jurien_key: "Jurien"}
 
-def get_display_name(user_key):
-    return KEY_TO_LABEL.get(user_key, "Unknown User")
+def get_display_name(user_key): return KEY_TO_LABEL.get(user_key, "Unknown User")
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
     "Intensity > Volume.",
-    "No man has the right to be an amateur in the matter of physical training. — Socrates",
     "Discipline equals freedom. — Jocko Willink",
     "It's not about perfect. It's about effort.",
     "The iron never lies. — Henry Rollins",
@@ -240,8 +204,7 @@ st.session_state['calorie_offset'] = int(qp.get("calorie_offset", 0))
 st.session_state['protein_custom'] = int(qp.get("protein_custom", 160))
 
 if 'analysis_start_date' not in st.session_state:
-    default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
-    st.session_state['analysis_start_date'] = pd.to_datetime(qp.get("start", default_start)).date()
+    st.session_state['analysis_start_date'] = pd.to_datetime(qp.get("start", (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d'))).date()
 if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(qp.get("end", '2026-09-01')).date()
 
@@ -249,83 +212,45 @@ if 'target_end_date' not in st.session_state:
 # CSS THEMES & FLOATING ISLAND NAV
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
-  --bg-primary: #F0EDE8;
-  --bg-secondary: #E8E4DD;
-  --text-main: #1A1A1A;
-  --text-muted: #6B6560;
-  --text-subtle: #A09890;
-  --surface: #FAFAF8;
-  --surface-hover: #F0EDE8;
-  --surface-active: #E8E4DD;
-  --border: rgba(0,0,0,0.08);
-  --border-strong: rgba(0,0,0,0.15);
-  --c-emerald: #059669;
-  --c-emerald-bg: rgba(5, 150, 105, 0.1);
-  --c-amber: #D97706;
-  --c-amber-bg: rgba(217, 119, 6, 0.1);
-  --c-rose: #DC2626;
-  --c-rose-bg: rgba(220, 38, 38, 0.1);
-  --c-blue: #2563EB;
-  --c-blue-bg: rgba(37, 99, 235, 0.1);
-  --c-blue-soft: rgba(37, 99, 235, 0.15);
+  --bg-primary: #F0EDE8; --bg-secondary: #E8E4DD; --text-main: #1A1A1A; --text-muted: #6B6560; --text-subtle: #A09890;
+  --surface: #FAFAF8; --surface-hover: #F0EDE8; --surface-active: #E8E4DD;
+  --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+  --c-emerald: #059669; --c-emerald-bg: rgba(5, 150, 105, 0.1);
+  --c-amber: #D97706; --c-amber-bg: rgba(217, 119, 6, 0.1);
+  --c-rose: #DC2626; --c-rose-bg: rgba(220, 38, 38, 0.1);
+  --c-blue: #2563EB; --c-blue-bg: rgba(37, 99, 235, 0.1); --c-blue-soft: rgba(37, 99, 235, 0.15);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
   --shadow-lg: 0 10px 30px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
-  --nav-bg: rgba(240, 237, 232, 0.85);
-  --nav-pill: #1A1A1A;
-  --nav-pill-text: #FAFAF8;
-  --nav-text: #6B6560;
-  --input-bg: #FAFAF8;
-  --input-text: #1A1A1A;
+  --nav-bg: rgba(240, 237, 232, 0.85); --nav-pill: #1A1A1A; --nav-pill-text: #FAFAF8; --nav-text: #6B6560;
+  --input-bg: #FAFAF8; --input-text: #1A1A1A;
 """
-
 css_dark_vars = """
-  --bg-primary: #0F0F0F;
-  --bg-secondary: #181818;
-  --text-main: #F0EDE8;
-  --text-muted: rgba(240,237,232,0.55);
-  --text-subtle: rgba(240,237,232,0.3);
-  --surface: #1C1C1C;
-  --surface-hover: #222222;
-  --surface-active: #282828;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.14);
-  --c-emerald: #10B981;
-  --c-emerald-bg: rgba(16, 185, 129, 0.12);
-  --c-amber: #F59E0B;
-  --c-amber-bg: rgba(245, 158, 11, 0.12);
-  --c-rose: #F87171;
-  --c-rose-bg: rgba(248, 113, 113, 0.12);
-  --c-blue: #60A5FA;
-  --c-blue-bg: rgba(96, 165, 250, 0.12);
-  --c-blue-soft: rgba(96, 165, 250, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --bg-primary: #0F0F0F; --bg-secondary: #181818; --text-main: #F0EDE8; --text-muted: rgba(240,237,232,0.55); --text-subtle: rgba(240,237,232,0.3);
+  --surface: #1C1C1C; --surface-hover: #222222; --surface-active: #282828;
+  --border: rgba(255,255,255,0.07); --border-strong: rgba(255,255,255,0.14);
+  --c-emerald: #10B981; --c-emerald-bg: rgba(16, 185, 129, 0.12);
+  --c-amber: #F59E0B; --c-amber-bg: rgba(245, 158, 11, 0.12);
+  --c-rose: #F87171; --c-rose-bg: rgba(248, 113, 113, 0.12);
+  --c-blue: #60A5FA; --c-blue-bg: rgba(96, 165, 250, 0.12); --c-blue-soft: rgba(96, 165, 250, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
-  --nav-bg: rgba(15, 15, 15, 0.88);
-  --nav-pill: #F0EDE8;
-  --nav-pill-text: #0F0F0F;
-  --nav-text: rgba(240,237,232,0.5);
-  --input-bg: #1C1C1C;
-  --input-text: #F0EDE8;
+  --nav-bg: rgba(15, 15, 15, 0.88); --nav-pill: #F0EDE8; --nav-pill-text: #0F0F0F; --nav-text: rgba(240,237,232,0.5);
+  --input-bg: #1C1C1C; --input-text: #F0EDE8;
 """
 
-if st.session_state['theme_pref'] == "Dark":
-    theme_block = f":root {{{css_dark_vars}}}"
-elif st.session_state['theme_pref'] == "Light":
-    theme_block = f":root {{{css_light_vars}}}"
-else:
-    theme_block = f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}"
+theme_block = f":root {{{css_dark_vars}}}" if st.session_state['theme_pref'] == "Dark" else (f":root {{{css_light_vars}}}" if st.session_state['theme_pref'] == "Light" else f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}")
 
 css = theme_block + """
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; }
-
 .stApp { background: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 6rem !important; max-width: 580px !important; }
 #MainMenu, footer, header { display: none !important; }
 
+.s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
+.settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
 .app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
 .wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
 .tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.5px; }
@@ -343,11 +268,6 @@ div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-
 div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
 div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 div[data-testid="stSegmentedControl"] { display: none !important; }
-
-.s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
-.settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
-.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
-.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
@@ -388,11 +308,6 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
 .del-btn button:hover { color: var(--c-rose) !important; }
 
-.alert-banner { padding: 10px 14px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-align: center; margin-bottom: 1rem; letter-spacing: 0.5px; }
-.alert-banner.warn { background: var(--c-amber-bg); border: 1px solid rgba(217,119,6,0.2); color: var(--c-amber); }
-.alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
-.alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
-
 div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
 div[data-testid="stSlider"] > div > div > div { height: 10px !important; border-radius: 5px !important; background: var(--surface-active) !important; }
 div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
@@ -409,10 +324,7 @@ div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !import
 div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; background: transparent !important; }
 
 div[data-testid="stForm"] button, .stButton > button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
-div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
-
-.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; border: 1px solid var(--border-strong) !important; margin-top: 0 !important; box-shadow: var(--shadow-sm) !important; }
-.stButton > button:hover { background: var(--surface-active) !important; box-shadow: var(--shadow-md) !important; }
+div[data-testid="stForm"] button:hover, .stButton > button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 
 div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; }
 div[data-testid="stDateInput"] input { color: var(--input-text) !important; }
@@ -437,20 +349,40 @@ st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════════════
 # AUTHENTICATION
 # ══════════════════════════════════════════════════════════════
+saved_user = st.query_params.get("user", None)
+
 if not st.session_state['auth_status']:
+    if saved_user:
+        if saved_user == admin_key:
+            st.session_state['is_admin'] = True
+        elif saved_user in USER_DATA:
+            st.session_state['auth_status'] = True
+            st.session_state['current_user'] = saved_user
+            st.session_state['sheet_url'] = USER_DATA[saved_user]
+            st.session_state['is_admin'] = False
+            st.rerun()
+        else:
+            st.error("🔒 Access Denied. Invalid link.")
+            st.stop()
+    else:
+        st.error("🔒 Access Denied. Use your personal link to log in.")
+        st.stop()
+
+if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.markdown("""
     <div style="text-align:center; margin-top:4rem; margin-bottom:3rem;">
-        <div class="wordmark" style="font-size:2.5rem;">METRICS</div><div class="tagline" style="font-size:0.65rem; margin-top:6px;">Auth Required</div>
-    </div><div class="s-head" style="text-align:center;">Select User</div>
+        <div class="wordmark" style="font-size:2.5rem;">METRICS</div><div class="tagline" style="font-size:0.65rem; margin-top:6px;">Admin Console</div>
+    </div><div class="s-head" style="text-align:center;">Select User Database</div>
     """, unsafe_allow_html=True)
     
-    for k, url in USER_DATA.items():
-        if st.button(get_display_name(k).upper(), key=f"auth_{k}", use_container_width=True):
-            st.session_state['auth_status'] = True
-            st.session_state['current_user'] = k
-            st.session_state['sheet_url'] = url
-            st.query_params.user = k
-            st.rerun()
+    cols = st.columns(len(USER_DATA))
+    for i, (k, url) in enumerate(USER_DATA.items()):
+        with cols[i]:
+            if st.button(get_display_name(k).upper(), key=f"admin_{k}", use_container_width=True):
+                st.session_state['auth_status'] = True
+                st.session_state['current_user'] = k
+                st.session_state['sheet_url'] = url
+                st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════
@@ -567,7 +499,8 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
 # DATA LOADING
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
-def load_data(url): return load_body_data(url)
+def load_data(url): 
+    return load_body_data(url)
 
 try:
     df = load_data(st.session_state['sheet_url'])
@@ -577,7 +510,6 @@ except Exception:
 
 df = st.session_state['active_df']
 
-# Ensure profile constants are loaded after auth
 if 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
 
@@ -973,3 +905,19 @@ elif app_view == "Settings":
         st.session_state['theme_pref'] = new_theme
         st.query_params.theme = new_theme
         st.rerun()
+
+    st.markdown('<div class="settings-lbl">Features</div>', unsafe_allow_html=True)
+    st.session_state['enable_quotes'] = st.toggle("Motivational Quotes", value=st.session_state.get('enable_quotes', True))
+    
+    if st.session_state.get('is_admin'):
+        st.markdown('<div class="settings-lbl" style="color:var(--c-rose);">Admin Console</div>', unsafe_allow_html=True)
+        if st.button("Switch Profile", use_container_width=True):
+            st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
+            st.session_state['auth_status'] = False
+            st.session_state['current_user'] = None
+            st.session_state['sheet_url'] = ""
+            if 'active_df' in st.session_state:
+                del st.session_state['active_df']
+            st.query_params.clear()
+            st.cache_data.clear()
+            st.rerun()
