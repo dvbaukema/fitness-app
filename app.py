@@ -16,18 +16,129 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Beta 2",
+    page_title="METRICS | Beta",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
+# ══════════════════════════════════════════════════════════════
+# GLOBAL HELPER FUNCTIONS (LOCKED AT TOP TO PREVENT NAME ERRORS)
+# ══════════════════════════════════════════════════════════════
 def system_alert(message, kind="ok"):
-    bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
+    bg = "#10B981" if kind == "ok" else "#EF4444"
     ph = st.empty()
-    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"DM Sans\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:#FFFFFF; padding:14px 36px; border-radius:100px; font-weight:800; font-family:\"DM Sans\", sans-serif; z-index:99999; box-shadow: 0 8px 32px rgba(0,0,0,0.25); text-transform:uppercase; letter-spacing:2px; font-size: 0.78rem;'>{message}</div>"
     ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
+
+def sgn(v): 
+    return "+" if v > 0 else ""
+
+def dclass(v, invert=False): 
+    if invert:
+        if v < 0: return "c-ok"
+        elif v > 0: return "c-err"
+        else: return "c-neu"
+    else:
+        if v > 0: return "c-ok"
+        elif v < 0: return "c-err"
+        else: return "c-neu"
+
+def eval_metric(metric, actual, profile, mmt=None, bft=None):
+    tgt, lower, upper = profile[metric] if len(profile[metric]) == 3 else (profile[metric][0], profile[metric][1], float('inf'))
+    
+    if metric == 'Weight (kg)':
+        if mmt is not None and bft is not None:
+            if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2:
+                return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
+            if actual < lower and mmt >= -0.2 and bft < lower:
+                return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
+
+    if metric == 'Muscle Mass (kg)':
+        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
+        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
+        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
+        
+    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
+    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
+    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
+
+def get_gradient(metric, profile, max_mag, is_smart_override=False):
+    c_g = "var(--c-emerald)"
+    c_o = "var(--c-amber)"
+    c_r = "var(--c-rose)"
+    
+    def to_pct(val): return max(min(((val + max_mag) / (2 * max_mag)) * 100, 100), 0)
+
+    if metric == 'Muscle Mass (kg)':
+        tgt, lower = profile[metric][:2]
+        p_l = to_pct(lower); p_t = to_pct(tgt)
+        return f"linear-gradient(to right, {c_r} 0%, {c_r} {p_l}%, {c_o} {p_l}%, {c_o} {p_t}%, {c_g} {p_t}%, {c_g} 100%)"
+    else:
+        tgt, lower, upper = profile[metric]
+        p_lower = to_pct(lower); p_upper = to_pct(upper)
+        if is_smart_override == "OVER":
+            return f"linear-gradient(to right, {c_o} 0%, {c_o} {p_lower}%, {c_g} {p_lower}%, {c_g} 100%)"
+        elif is_smart_override == "UNDER":
+            return f"linear-gradient(to right, {c_g} 0%, {c_g} {p_upper}%, {c_r} {p_upper}%, {c_r} 100%)"
+        return f"linear-gradient(to right, {c_o} 0%, {c_o} {p_lower}%, {c_g} {p_lower}%, {c_g} {p_upper}%, {c_r} {p_upper}%, {c_r} 100%)"
+
+def hud_card(kind, icon, title, desc):
+    color_map = {
+        'c-ok': 'var(--c-emerald)', 'c-emerald': 'var(--c-emerald)',
+        'c-wrn': 'var(--c-amber)', 'c-amber': 'var(--c-amber)',
+        'c-err': 'var(--c-rose)', 'c-rose': 'var(--c-rose)',
+        'c-neu': 'var(--text-muted)',
+    }
+    border_color = color_map.get(kind, 'var(--border)')
+    return f"""
+    <div class='hud-card' style='border-left: 3px solid {border_color};'>
+      <div class='hud-icon'>{icon}</div>
+      <div>
+        <div class='hud-title' style='color:{border_color};'>{title}</div>
+        <div class='hud-desc'>{desc}</div>
+      </div>
+    </div>"""
+
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
+    tgt_rate = profile[metric][0]
+    s = sgn(actual_rate); ts = sgn(tgt_rate)
+    c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
+    
+    is_smart_override = False
+    if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
+    if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
+
+    if metric == 'Muscle Mass (kg)':
+        max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
+        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'><span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span></div>"
+    else:
+        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
+        min_val = min(profile[metric][1], profile[metric][2])
+        max_val = max(profile[metric][1], profile[metric][2])
+        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'><span style='text-align:left;'>MIN {min_val:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX {max_val:.2f}</span></div>"
+        
+    pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
+    pct = max(min(pct, 97), 3)
+    bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
+
+    html_block = f"""
+    <div class='tj-blk'>
+      <div class='tj-row' style='margin-bottom:10px;'>
+        <span class='tj-nm'>{label}</span>
+        <div style='text-align:right;'>
+          <div style='font-family:\"DM Mono\", monospace; font-size:1.2rem; font-weight:700; color:var(--text-main); line-height:1;'>
+            {s}{actual_rate:.2f} <span style='font-size:0.65rem; color:var(--text-subtle); font-weight:400;'>{unit}</span>
+          </div>
+        </div>
+      </div>
+      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
+      {bounds_html}
+      <div class='tj-st {c_txt}'>{status}</div>
+    </div>"""
+    return html_block
+
 
 # ══════════════════════════════════════════════════════════════
 # HARDCODED PROTOCOL TARGETS
@@ -93,73 +204,94 @@ def extract_sheet_id(url):
     if re.match(r'^[a-zA-Z0-9-_]{20,}$', url): return url
     return None
 
-def load_body_constants(sheet_url):
+def read_sheet_range(sheet_url, range_name):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: 
-        return {'height': 180.0, 'gender': 'male', 'age': 25}
+    if not service or not sheet_id: return pd.DataFrame()
     try:
-        res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='Body!A:C').execute()
+        res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
         vals = res.get('values', [])
-        if len(vals) < 2: return {'height': 180.0, 'gender': 'male', 'age': 25}
-        row = vals[1]
-        h = float(row[0]) if len(row) > 0 else 180.0
-        g = str(row[1]).lower().strip() if len(row) > 1 else 'male'
-        a = int(float(row[2])) if len(row) > 2 else 25
+        if len(vals) < 2: return pd.DataFrame()
+        headers = vals[0]
+        data = vals[1:]
+        return pd.DataFrame(data, columns=headers)
+    except HttpError:
+        return pd.DataFrame()
+
+def load_body_constants(sheet_url):
+    df = read_sheet_range(sheet_url, 'Body!A:C')
+    if df.empty:
+        return {'height': 180.0, 'gender': 'male', 'age': 25}
+    try:
+        row = df.iloc[0]
+        # Strict order: Height, Gender, Age
+        h = float(row.iloc[0]) if len(row) > 0 else 180.0
+        g = str(row.iloc[1]).lower().strip() if len(row) > 1 else 'male'
+        a = int(float(row.iloc[2])) if len(row) > 2 else 25
         return {'height': h, 'gender': g, 'age': a}
-    except Exception:
+    except:
         return {'height': 180.0, 'gender': 'male', 'age': 25}
 
-def read_gsheet(sheet_url):
-    service = get_google_sheets_service()
-    sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-    try:
-        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='Data!A:E').execute()
-        values = result.get('values', [])
-        if not values or len(values) < 2: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-        headers = values[0]
-        data = values[1:]
-        df = pd.DataFrame(data, columns=headers)
-        if 'Time' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-        else:
-            df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
-        for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
-            df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
-        return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
-    except HttpError:
+def load_body_data(sheet_url):
+    df = read_sheet_range(sheet_url, 'Data!A:E')
+    if df.empty:
         return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
+    
+    if 'Time' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
+    else:
+        df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
+        
+    for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
+        if m in df.columns:
+            df[m] = pd.to_numeric(df[m], errors='coerce')
+        else:
+            df[m] = np.nan
+            
+    return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
-def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
+def append_to_sheet(sheet_url, range_name, values):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        time_now = datetime.utcnow() + timedelta(hours=2)
-        time_str = time_now.strftime('%H:%M:%S')
-        values = [[date_str, time_str, weight, body_fat, muscle_mass]]
         body = {'values': values}
-        service.spreadsheets().values().append(spreadsheetId=sheet_id, range='Data!A:E', valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
+        service.spreadsheets().values().append(
+            spreadsheetId=sheet_id, range=range_name,
+            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body
+        ).execute()
         return True
     except HttpError:
         return False
 
-def overwrite_gsheet(sheet_url, df):
+def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
+    time_str = (datetime.utcnow() + timedelta(hours=2)).strftime('%H:%M:%S')
+    return append_to_sheet(sheet_url, 'Data!A:E', [[date_str, time_str, weight, body_fat, muscle_mass]])
+
+def overwrite_sheet_range(sheet_url, range_name, df):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='Data!A:E').execute()
-        values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
-        for _, row in df.iterrows():
-            d = pd.Timestamp(row['Date'])
-            values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
+        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range=range_name).execute()
+        values = [df.columns.tolist()] + df.values.tolist()
         body = {'values': values}
-        service.spreadsheets().values().update(spreadsheetId=sheet_id, range='Data!A:E', valueInputOption='USER_ENTERED', body=body).execute()
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id, range=range_name,
+            valueInputOption='USER_ENTERED', body=body
+        ).execute()
         return True
     except HttpError:
         return False
+
+def overwrite_body_sheet(sheet_url, df):
+    values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
+    for _, row in df.iterrows():
+        d = pd.Timestamp(row['Date'])
+        values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
+    
+    out_df = pd.DataFrame(values[1:], columns=values[0])
+    return overwrite_sheet_range(sheet_url, 'Data!A:E', out_df)
 
 # ══════════════════════════════════════════════════════════════
 # LOAD SECRETS & DIRECTORY
@@ -207,22 +339,24 @@ if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = 
 
 if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
 if 'theme_pref' not in st.session_state: st.session_state['theme_pref'] = st.query_params.get("theme", "System")
+
 if 'activity_level' not in st.session_state: st.session_state['activity_level'] = st.query_params.get("activity", "Moderate (3-5 days/wk)")
 if 'calorie_offset' not in st.session_state: st.session_state['calorie_offset'] = int(st.query_params.get("calorie_offset", 0))
 if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] = int(st.query_params.get("protein_custom", 160))
 
 if 'gym_start_date' not in st.session_state:
     st.session_state['gym_start_date'] = pd.to_datetime(st.query_params.get("gym_start", '2026-03-17')).date()
+
 if 'analysis_start_date' not in st.session_state:
     default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
 if 'target_end_date' not in st.session_state:
-    st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", '2026-09-01')).date()
+    default_end = '2026-09-01'
+    st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
 
 # ══════════════════════════════════════════════════════════════
 # CSS — COMPLETE DESIGN OVERHAUL
 # ══════════════════════════════════════════════════════════════
-
 css_light_vars = """
   --bg-primary: #F0EDE8;
   --bg-secondary: #E8E4DD;
@@ -710,6 +844,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
   transition: box-shadow 0.15s ease;
 }
 .hist-row:hover { box-shadow: var(--shadow-md); }
+
 .del-btn button {
     background: transparent !important;
     border: none !important;
@@ -772,7 +907,7 @@ div[data-testid="stSlider"] > div > div > div {
 div[data-testid="stSlider"] div[role="slider"] {
   width: 22px !important;
   height: 22px !important;
-  background: var(--text-main) !important;
+  background: var(--c-blue) !important;
   border: 3px solid var(--bg-primary) !important;
   box-shadow: var(--shadow-md) !important;
 }
@@ -814,7 +949,7 @@ div[data-testid="stTextInput"] > div > div {
   background: var(--input-bg) !important;
   border: 1px solid var(--border-strong) !important;
   border-radius: 12px !important;
-  min-height: 3rem !important;
+  min-height: 3.2rem !important;
 }
 div[data-testid="stTextInput"] input {
   color: var(--input-text) !important;
@@ -935,14 +1070,14 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 """
-
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN via URL parameter
+# AUTHENTICATION
 # ══════════════════════════════════════════════════════════════
+saved_user = st.query_params.get("user", None)
+
 if not st.session_state['auth_status']:
-    saved_user = st.query_params.get("user", None)
     if saved_user:
         if saved_user == admin_key:
             st.session_state['is_admin'] = True
@@ -952,6 +1087,7 @@ if not st.session_state['auth_status']:
             st.session_state['current_user'] = saved_user
             st.session_state['sheet_url'] = USER_DATA[saved_user]
             st.session_state['is_admin'] = False
+            st.rerun()
         else:
             st.query_params.clear()
             st.error("🔒 Access Denied. Invalid link.")
@@ -960,9 +1096,6 @@ if not st.session_state['auth_status']:
         st.error("🔒 Access Denied. Use your personal link to log in.")
         st.stop()
 
-# ══════════════════════════════════════════════════════════════
-# ADMIN PROFILE SELECTION SCREEN
-# ══════════════════════════════════════════════════════════════
 if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.markdown("""
     <div style="text-align:center; margin-top:4rem; margin-bottom:3rem;">
@@ -990,12 +1123,11 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url): 
-    return read_gsheet(url)
+    return load_body_data(url)
 
 try:
     df = load_data(st.session_state['sheet_url'])
-    if 'active_df' not in st.session_state:
-        st.session_state['active_df'] = df
+    st.session_state['active_df'] = df
 except Exception as e:
     st.error(f"System Error: Could not load data. {str(e)}")
     st.stop()
@@ -1005,7 +1137,6 @@ df = st.session_state['active_df']
 if st.session_state['auth_status'] and 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
 
-GOAL_PROFILES = st.session_state['goal_profiles']
 METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'Body Weight', 'Muscle Mass (kg)': 'Muscle Mass', 'Body Fat (%)': 'Body Fat'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
@@ -1088,10 +1219,8 @@ if has_enough_comp_data:
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
-if "goal" in st.query_params: st.session_state['current_goal'] = st.query_params.get("goal")
-
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
-ideal_rates = GOAL_PROFILES.get(active_goal, GOAL_PROFILES['Lean Bulk'])
+ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_state['goal_profiles']['Lean Bulk'])
 
 header_placeholder = st.empty()
 
@@ -1117,7 +1246,7 @@ if app_view == "Entry":
             st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
         st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['daily_quote']}\"</div></div>", unsafe_allow_html=True)
 
-    selected = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
+    selected = st.selectbox("Protocol", list(st.session_state['goal_profiles'].keys()), index=list(st.session_state['goal_profiles'].keys()).index(active_goal))
     if selected != st.session_state['current_goal']:
         st.session_state['current_goal'] = selected
         st.query_params.goal = selected
@@ -1164,7 +1293,7 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Note: Placed OUTSIDE the form to allow real-time reactivity
+    # Placed OUTSIDE the form to allow real-time reactivity for the % toggle calculation
     w_val = float(last['Weight (kg)'])
     w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
     
@@ -1185,11 +1314,9 @@ if app_view == "Entry":
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
-            now = datetime.now()
-            date_str = now.strftime('%Y-%m-%d')
-            append_to_gsheet(st.session_state['sheet_url'], date_str, w, m, bf)
-            new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
-            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
+            now_str = datetime.now().strftime('%Y-%m-%d')
+            append_body_entry(st.session_state['sheet_url'], now_str, w, m, bf)
+            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
             if st.session_state['enable_quotes']:
                 st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
@@ -1197,7 +1324,7 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION TAB
+# NUTRITION TAB 
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
     st.markdown('<div class="s-head" style="margin-top:0;">Targets & Coaching</div>', unsafe_allow_html=True)
@@ -1212,6 +1339,7 @@ elif app_view == "Nutrition":
     cal_offset = int(st.session_state['calorie_offset'])
     custom_prot = int(st.session_state['protein_custom'])
     
+    # Mifflin-St Jeor
     if g_curr == "male": 
         bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) + 5
     else: 
@@ -1606,7 +1734,7 @@ elif app_view == "Data":
 
         can_delete = pd.Timestamp(row['Date']) >= seven_days_ago
         
-        col1, col2, col3, col4, col5 = st.columns([2.5, 1.8, 1.8, 1.8, 0.8], vertical_alignment="center")
+        col1, col2, col3, col4, col5 = st.columns([2.5, 1.8, 1.8, 1.8, 0.8])
         col1.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.75rem; color:var(--text-main); font-weight:600;'>{row['Date'].strftime('%d %b %Y')}</span>", unsafe_allow_html=True)
         col2.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.95rem; color:var(--text-main); font-weight:700;'>{row['Weight (kg)']:.1f}</span><br>{delta_html_w}", unsafe_allow_html=True)
         col3.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.95rem; color:var(--text-main); font-weight:700;'>{row['Muscle Mass (kg)']:.1f}</span><br>{delta_html_m}", unsafe_allow_html=True)
@@ -1614,10 +1742,10 @@ elif app_view == "Data":
         
         with col5:
             if can_delete:
-                st.markdown("<div class='del-btn'>", unsafe_allow_html=True)
+                st.markdown("<div class='del-btn' style='padding-top:2px;'>", unsafe_allow_html=True)
                 if st.button("✕", key=f"del_{i}"):
                     new_df = df.drop(index=i).reset_index(drop=True)
-                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
+                    overwrite_body_sheet(st.session_state['sheet_url'], new_df)
                     st.session_state['active_df'] = new_df
                     load_data.clear()
                     system_alert("Deleted", "err")
@@ -1630,13 +1758,11 @@ elif app_view == "Data":
 # SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
-    header_placeholder.empty()
-
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.95rem; font-weight:600; color:var(--text-muted); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
     
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Physiology (Read-Only)</div>', unsafe_allow_html=True)
-    bc = st.session_state.get('body_constants', {'height': 180.0, 'gender': 'male', 'age': 25})
+    bc = st.session_state.get('body_constants', {'height': 180, 'gender': 'male', 'age': 25})
     
     st.markdown(f"""
     <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; justify-content:space-between; margin-bottom:1.5rem; font-family:'DM Mono', monospace; font-size:0.8rem;">
