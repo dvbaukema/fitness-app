@@ -13,13 +13,28 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 # ══════════════════════════════════════════════════════════════
-# PAGE CONFIG
+# PAGE CONFIG & WORKOUT DATABASE
 # ══════════════════════════════════════════════════════════════
-st.set_page_config(
-    page_title="METRICS | Beta 2",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="METRICS | Beta 2", layout="centered", initial_sidebar_state="collapsed")
+
+ROUTINES = {
+    "Upper Body 1 (Chest & Horiz)": [
+        "DB Press (45°) [2x8-10]", "Incline Chest Press machine [2x8-10]", "Assisted Pullup [2x10-12]", 
+        "Single Hand Seated Row [2x8-10]", "Side Delt Flys [2xFail]", "Cross-Body Cable Tricep Ext [2x12-15]"
+    ],
+    "Lower Body 1 (Quad-Dominant)": [
+        "Barbell Squat [2x3-5]", "Leg Press/Hack Squat [2x8-10]", "Leg Extensions [2xFail]", 
+        "Leg Curls [2x10-12]", "Standing Calf Raises [2x12-20]", "Abs Rope [2xFail]"
+    ],
+    "Upper Body 2 (Back & Vert)": [
+        "Lat Pulldown [2x10-12]", "Shoulder Press Machine [2x8-10]", "Upper Back Row [2x12-15]", 
+        "Pec Deck Fly / Cable Cross [2x10-15]", "Brachialis Rope Curl [2x12-15]", "Overhead Tricep Ext [2x12-15]"
+    ],
+    "Lower Body 2 (Posterior)": [
+        "RDLs [2x10-12]", "Barbell Squat [2x3-5]", "Seated/Lying Hamstring Curls [2x10-12]", 
+        "45 Degree Hyperextension [2x10-12]", "Calf Raises [2x12-20]", "Abs Rope [2xFail]"
+    ]
+}
 
 def system_alert(message, kind="ok"):
     bg = "#10B981" if kind == "ok" else "#EF4444"
@@ -30,7 +45,7 @@ def system_alert(message, kind="ok"):
     ph.empty()
 
 # ══════════════════════════════════════════════════════════════
-# PROTOCOL TARGETS
+# HARDCODED PROTOCOL TARGETS
 # ══════════════════════════════════════════════════════════════
 DEFAULT_PROFILES = {
     "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
@@ -40,33 +55,24 @@ DEFAULT_PROFILES = {
     "Aggressive Bulk": {'Weight (kg)': [2.5, 2.0, 3.5],    'Muscle Mass (kg)': [0.8, 0.5],   'Body Fat (%)': [0.6, 0.3, 1.0]},
 }
 
-ACTIVITY_MULTIPLIERS = {
-    "Sedentary (Office job)": 1.2, 
-    "Light (1-3 days/wk)": 1.375, 
-    "Moderate (3-5 days/wk)": 1.55, 
-    "Active (6-7 days/wk)": 1.725, 
-    "Athlete (2x/day)": 1.9
-}
+ACTIVITY_MULTIPLIERS = {"Sedentary (Office job)": 1.2, "Light (1-3 days/wk)": 1.375, "Moderate (3-5 days/wk)": 1.55, "Active (6-7 days/wk)": 1.725, "Athlete (2x/day)": 1.9}
 
 # ══════════════════════════════════════════════════════════════
-# LOCALSTORAGE SYNC SCRIPT
+# AUTO‑LOGIN & PERMANENT STORAGE ENGINE (localStorage)
 # ══════════════════════════════════════════════════════════════
 st.markdown("""
 <script>
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
-    function sync(key) {
-        const saved = localStorage.getItem('metrics_' + key);
-        if (saved && !urlParams.has(key)) { urlParams.set(key, saved); redirect = true; }
-        else if (urlParams.has(key)) { localStorage.setItem('metrics_' + key, urlParams.get(key)); }
-    }
-    sync('user'); sync('goal'); sync('start'); sync('end'); sync('theme');
-    sync('activity'); sync('protein_custom'); sync('calorie_offset');
-    
-    if (redirect) {
-        window.location.replace(window.location.origin + window.location.pathname + '?' + urlParams.toString());
-    }
+    const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset'];
+    keys.forEach(k => {
+        const sk = 'metrics_' + k;
+        const val = localStorage.getItem(sk);
+        if (val && !urlParams.has(k)) { urlParams.set(k, val); redirect = true; }
+        else if (urlParams.has(k)) { localStorage.setItem(sk, urlParams.get(k)); }
+    });
+    if (redirect) window.location.replace(window.location.origin + window.location.pathname + '?' + urlParams.toString());
 })();
 </script>
 """, unsafe_allow_html=True)
@@ -118,28 +124,33 @@ def overwrite_sheet_range(sheet_url, range_name, df):
     if not service or not sheet_id: return False
     try:
         service.spreadsheets().values().clear(spreadsheetId=sheet_id, range=range_name).execute()
+        values = [df.columns.tolist()] + df.values.tolist()
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', body={'values': [df.columns.tolist()] + df.values.tolist()}
+            valueInputOption='USER_ENTERED', body={'values': values}
         ).execute()
         return True
     except HttpError: return False
 
+# ══════════════════════════════════════════════════════════════
+# SHEET‑SPECIFIC DATA LOADERS
+# ══════════════════════════════════════════════════════════════
 def load_body_constants(sheet_url):
     df = read_sheet_range(sheet_url, 'Body!A:C')
     if df.empty: return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
         row = df.iloc[0]
-        return {'height': float(row.get('Height', 180)), 'gender': str(row.get('Gender', 'male')).lower().strip(), 'age': int(float(row.get('Age', 25)))}
+        h = float(row.get('Height', 180))
+        g = str(row.get('Gender', 'male')).lower().strip()
+        a = int(float(row.get('Age', 25)))
+        return {'height': h, 'gender': g, 'age': a}
     except: return {'height': 180.0, 'gender': 'male', 'age': 25}
 
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
     if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-    if 'Time' in df.columns: df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-    else: df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
-    for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
-        df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
+    df['Date'] = pd.to_datetime(df['Date'] + ' ' + df['Time'] if 'Time' in df.columns else df['Date'], format='mixed', errors='coerce')
+    for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']: df[m] = pd.to_numeric(df[m], errors='coerce') if m in df.columns else np.nan
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
 def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
@@ -152,6 +163,21 @@ def overwrite_body_sheet(sheet_url, df):
         d = pd.Timestamp(row['Date'])
         values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
     return overwrite_sheet_range(sheet_url, 'Data!A:E', pd.DataFrame(values[1:], columns=values[0]))
+
+def load_workout_data(sheet_url):
+    df = read_sheet_range(sheet_url, 'Workouts!A:F')
+    expected = ['Date','Workout Type','Exercise','Weight','Set','Reps']
+    if df.empty: return pd.DataFrame(columns=expected)
+    for c in expected:
+        if c not in df.columns: df[c] = '' if c == 'Exercise' else np.nan
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df['Weight'] = pd.to_numeric(df['Weight'], errors='coerce')
+    df['Set'] = pd.to_numeric(df['Set'], errors='coerce').fillna(1).astype(int)
+    df['Reps'] = pd.to_numeric(df['Reps'], errors='coerce').fillna(0).astype(int)
+    return df[expected].dropna(subset=['Date','Exercise']).reset_index(drop=True)
+
+def append_workout_rows(sheet_url, rows):
+    return append_to_sheet(sheet_url, 'Workouts!A:F', rows)
 
 # ══════════════════════════════════════════════════════════════
 # SECRETS DIRECTORY
@@ -167,8 +193,6 @@ admin_key = st.secrets.get("admin_user_key", "Admin")
 
 USER_DATA = {dan_key: dan_url, bram_key: bram_url, jurien_key: jurien_url}
 KEY_TO_LABEL = {dan_key: "Daniel", bram_key: "Bram", jurien_key: "Jurien"}
-
-def get_display_name(user_key): return KEY_TO_LABEL.get(user_key, "Unknown User")
 
 DEFAULT_QUOTES = [
     "The man who loves walking will walk further than the man who loves the destination.",
@@ -208,8 +232,11 @@ if 'analysis_start_date' not in st.session_state:
 if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime(qp.get("end", '2026-09-01')).date()
 
+if st.session_state['auth_status'] and 'body_constants' not in st.session_state:
+    st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
+
 # ══════════════════════════════════════════════════════════════
-# CSS THEMES & FLOATING ISLAND NAV
+# CSS THEMES
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F0EDE8; --bg-secondary: #E8E4DD; --text-main: #1A1A1A; --text-muted: #6B6560; --text-subtle: #A09890;
@@ -221,7 +248,6 @@ css_light_vars = """
   --c-blue: #2563EB; --c-blue-bg: rgba(37, 99, 235, 0.1); --c-blue-soft: rgba(37, 99, 235, 0.15);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 10px 30px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
   --nav-bg: rgba(240, 237, 232, 0.85); --nav-pill: #1A1A1A; --nav-pill-text: #FAFAF8; --nav-text: #6B6560;
   --input-bg: #FAFAF8; --input-text: #1A1A1A;
 """
@@ -234,7 +260,6 @@ css_dark_vars = """
   --c-rose: #F87171; --c-rose-bg: rgba(248, 113, 113, 0.12);
   --c-blue: #60A5FA; --c-blue-bg: rgba(96, 165, 250, 0.12); --c-blue-soft: rgba(96, 165, 250, 0.2);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
   --nav-bg: rgba(15, 15, 15, 0.88); --nav-pill: #F0EDE8; --nav-pill-text: #0F0F0F; --nav-text: rgba(240,237,232,0.5);
   --input-bg: #1C1C1C; --input-text: #F0EDE8;
 """
@@ -255,29 +280,24 @@ css = theme_block + """
 .wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
 .tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.5px; }
 .live-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--c-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 100px; padding: 5px 12px; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1.5px; }
-.live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-emerald); animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.7); } }
 
-/* NAVIGATION HACK */
 div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
-div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 8px 18px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 6px 14px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
 div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; transform: translateY(-1px); }
 div[role="radiogroup"] > label[data-checked="true"] { background: var(--nav-pill) !important; border-color: var(--nav-pill) !important; box-shadow: var(--shadow-md); }
-div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem !important; letter-spacing: 0.5px !important; }
+div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.75rem !important; letter-spacing: 0.5px !important; }
 div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 800 !important; }
-div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
+div[role="radiogroup"] span[data-baseweb="radio"], div[data-testid="stSegmentedControl"] { display: none !important; }
 div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
-div[data-testid="stSegmentedControl"] { display: none !important; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
-.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
-.mini-cell:hover { box-shadow: var(--shadow-md); }
+.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); }
 .mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
 .mini-val { font-family: 'DM Mono', monospace; font-size: 1.55rem; font-weight: 600; color: var(--text-main); line-height: 1; display: inline-block;}
 .mini-unit { font-size: 0.65rem; color: var(--text-subtle); margin-left: 2px; font-weight: 400;}
 .mini-sub { font-family: 'DM Mono', monospace; font-size: 0.65rem; font-weight: 600; margin-top: 8px; display: block; letter-spacing: 0.5px;}
 
-.c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; } .c-blue { color: var(--c-blue) !important; }
+.c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; }
 
 .chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
 .chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
@@ -288,7 +308,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
 
 .hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
-.hud-icon { font-size: 1.1rem; width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
+.hud-icon { font-size: 1.1rem; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; }
 .hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
 .hud-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
 
@@ -300,218 +320,56 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .tj-st { font-family: 'DM Mono', monospace; font-size: 0.58rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; display: block; margin-top: 8px; }
 
 .hist-row { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; box-shadow: var(--shadow-sm); transition: box-shadow 0.15s ease; }
-.hist-row:hover { box-shadow: var(--shadow-md); }
 .hist-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; width: 100%; align-items: center; gap: 10px; }
 .hist-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; padding: 0 16px; margin-bottom: 8px; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
 .hist-date { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--text-subtle); font-weight: 500; letter-spacing: 0.5px; }
 .hist-vals { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text-main); font-weight: 600; text-align: right; }
-.del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+.del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
 .del-btn button:hover { color: var(--c-rose) !important; }
 
 div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
-div[data-testid="stSlider"] > div > div > div { height: 10px !important; border-radius: 5px !important; background: var(--surface-active) !important; }
 div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
 
-div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
-div[data-testid="stSelectbox"] div[class*="singleValue"] { color: var(--input-text) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
-div[data-testid="stSelectbox"] [class*="placeholder"] { color: var(--text-muted) !important; }
-div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; }
-div[data-testid="stSelectbox"] [class*="option"] { color: var(--input-text) !important; background: transparent !important; }
-div[data-testid="stSelectbox"] [class*="option"]:hover { background: var(--surface-active) !important; }
-
 div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
-div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; background: transparent !important; }
+div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; }
 
-div[data-testid="stForm"] button, .stButton > button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
-div[data-testid="stForm"] button:hover, .stButton > button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
-
-div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; }
-div[data-testid="stDateInput"] input { color: var(--input-text) !important; }
-
-div[data-testid="stToggle"] label p { color: var(--text-main) !important; font-size: 0.85rem !important; }
-
-div[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 14px !important; overflow: hidden; }
-div[data-testid="stExpander"] summary p { color: var(--text-main) !important; font-size: 0.82rem !important; font-weight: 600 !important; }
-div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p { color: var(--text-main) !important; }
-
-div[data-testid="stAlert"] { border-radius: 12px !important; }
-div[data-testid="stSelectbox"] > div > div { display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; }
-div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important; }
-div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; }
-
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+div[data-testid="stForm"] button, .stButton > button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; }
+div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTHENTICATION
+# AUTH
 # ══════════════════════════════════════════════════════════════
-saved_user = st.query_params.get("user", None)
-
 if not st.session_state['auth_status']:
-    if saved_user:
-        if saved_user == admin_key:
-            st.session_state['is_admin'] = True
-        elif saved_user in USER_DATA:
-            st.session_state['auth_status'] = True
-            st.session_state['current_user'] = saved_user
-            st.session_state['sheet_url'] = USER_DATA[saved_user]
-            st.session_state['is_admin'] = False
-            st.rerun()
-        else:
-            st.error("🔒 Access Denied. Invalid link.")
-            st.stop()
-    else:
-        st.error("🔒 Access Denied. Use your personal link to log in.")
-        st.stop()
-
-if st.session_state.get('is_admin') and not st.session_state['auth_status']:
     st.markdown("""
     <div style="text-align:center; margin-top:4rem; margin-bottom:3rem;">
-        <div class="wordmark" style="font-size:2.5rem;">METRICS</div><div class="tagline" style="font-size:0.65rem; margin-top:6px;">Admin Console</div>
-    </div><div class="s-head" style="text-align:center;">Select User Database</div>
+        <div class="wordmark" style="font-size:2.5rem;">METRICS</div><div class="tagline" style="font-size:0.65rem; margin-top:6px;">Auth Required</div>
+    </div><div class="s-head" style="text-align:center;">Select User</div>
     """, unsafe_allow_html=True)
-    
-    cols = st.columns(len(USER_DATA))
-    for i, (k, url) in enumerate(USER_DATA.items()):
-        with cols[i]:
-            if st.button(get_display_name(k).upper(), key=f"admin_{k}", use_container_width=True):
-                st.session_state['auth_status'] = True
-                st.session_state['current_user'] = k
-                st.session_state['sheet_url'] = url
-                st.rerun()
+    for k, url in USER_DATA.items():
+        if st.button(get_display_name(k).upper(), key=f"auth_{k}", use_container_width=True):
+            st.session_state['auth_status'] = True
+            st.session_state['current_user'] = k
+            st.session_state['sheet_url'] = url
+            st.query_params.user = k
+            st.rerun()
     st.stop()
-
-# ══════════════════════════════════════════════════════════════
-# RECOMPOSITION MATH ENGINE & HELPERS
-# ══════════════════════════════════════════════════════════════
-def sgn(v): 
-    return "+" if v > 0 else ""
-
-def dclass(v, invert=False): 
-    if invert:
-        if v < 0: return "c-ok"
-        elif v > 0: return "c-err"
-        else: return "c-neu"
-    else:
-        if v > 0: return "c-ok"
-        elif v < 0: return "c-err"
-        else: return "c-neu"
-
-def eval_metric(metric, actual, profile, mmt=None, bft=None):
-    tgt, lower, upper = profile[metric] if len(profile[metric]) == 3 else (profile[metric][0], profile[metric][1], float('inf'))
-    
-    if metric == 'Weight (kg)':
-        if mmt is not None and bft is not None:
-            if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2:
-                return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
-            if actual < lower and mmt >= -0.2 and bft < lower:
-                return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
-
-    if metric == 'Muscle Mass (kg)':
-        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
-        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
-        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
-        
-    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
-    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
-    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
-
-def get_gradient(metric, profile, max_mag, is_smart_override=False):
-    c_g = "var(--c-emerald)"
-    c_o = "var(--c-amber)"
-    c_r = "var(--c-rose)"
-    
-    def to_pct(val): return max(min(((val + max_mag) / (2 * max_mag)) * 100, 100), 0)
-
-    if metric == 'Muscle Mass (kg)':
-        tgt, lower = profile[metric][:2]
-        p_l = to_pct(lower); p_t = to_pct(tgt)
-        return f"linear-gradient(to right, {c_r} 0%, {c_r} {p_l}%, {c_o} {p_l}%, {c_o} {p_t}%, {c_g} {p_t}%, {c_g} 100%)"
-    else:
-        tgt, lower, upper = profile[metric]
-        p_lower = to_pct(lower); p_upper = to_pct(upper)
-        if is_smart_override == "OVER":
-            return f"linear-gradient(to right, {c_o} 0%, {c_o} {p_lower}%, {c_g} {p_lower}%, {c_g} 100%)"
-        elif is_smart_override == "UNDER":
-            return f"linear-gradient(to right, {c_g} 0%, {c_g} {p_upper}%, {c_r} {p_upper}%, {c_r} 100%)"
-        return f"linear-gradient(to right, {c_o} 0%, {c_o} {p_lower}%, {c_g} {p_lower}%, {c_g} {p_upper}%, {c_r} {p_upper}%, {c_r} 100%)"
-
-def hud_card(kind, icon, title, desc):
-    color_map = {
-        'c-ok': 'var(--c-emerald)', 'c-emerald': 'var(--c-emerald)',
-        'c-wrn': 'var(--c-amber)', 'c-amber': 'var(--c-amber)',
-        'c-err': 'var(--c-rose)', 'c-rose': 'var(--c-rose)',
-        'c-neu': 'var(--text-muted)',
-    }
-    border_color = color_map.get(kind, 'var(--border)')
-    return f"""
-    <div class='hud-card' style='border-left: 3px solid {border_color};'>
-      <div class='hud-icon'>{icon}</div>
-      <div>
-        <div class='hud-title' style='color:{border_color};'>{title}</div>
-        <div class='hud-desc'>{desc}</div>
-      </div>
-    </div>"""
-
-def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
-    tgt_rate = profile[metric][0]
-    s = sgn(actual_rate); ts = sgn(tgt_rate)
-    c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
-    
-    is_smart_override = False
-    if status == 'MUSCLE DRIVEN': is_smart_override = "OVER"
-    if status == 'FAT LOSS DRIVEN': is_smart_override = "UNDER"
-
-    if metric == 'Muscle Mass (kg)':
-        max_bound = max(abs(profile[metric][1]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
-        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'><span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span></div>"
-    else:
-        max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]), abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
-        min_val = min(profile[metric][1], profile[metric][2])
-        max_val = max(profile[metric][1], profile[metric][2])
-        bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'><span style='text-align:left;'>MIN {min_val:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX {max_val:.2f}</span></div>"
-        
-    pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
-    pct = max(min(pct, 97), 3)
-    bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
-
-    html_block = f"""
-    <div class='tj-blk'>
-      <div class='tj-row' style='margin-bottom:10px;'>
-        <span class='tj-nm'>{label}</span>
-        <div style='text-align:right;'>
-          <div style='font-family:\"DM Mono\", monospace; font-size:1.2rem; font-weight:700; color:var(--text-main); line-height:1;'>
-            {s}{actual_rate:.2f} <span style='font-size:0.65rem; color:var(--text-subtle); font-weight:400;'>{unit}</span>
-          </div>
-        </div>
-      </div>
-      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
-      {bounds_html}
-      <div class='tj-st {c_txt}'>{status}</div>
-    </div>"""
-    return html_block
 
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
-def load_data(url): 
-    return load_body_data(url)
+def load_data(url): return load_body_data(url)
 
 try:
     df = load_data(st.session_state['sheet_url'])
     st.session_state['active_df'] = df
-except Exception: 
-    st.stop()
+except Exception: st.stop()
 
 df = st.session_state['active_df']
-
-if 'body_constants' not in st.session_state:
-    st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
+workout_df = load_workout_data(st.session_state['sheet_url'])
 
 METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'BODY WEIGHT', 'Muscle Mass (kg)': 'MUSCLE MASS', 'Body Fat (%)': 'BODY FAT'}
@@ -531,77 +389,106 @@ recent_dfs = {}
 if has_w:
     df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
     recent_dfs['Weight (kg)'] = df_w 
-    X_w_raw = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values
-    X_w = X_w_raw.reshape(-1, 1)
-    y_w = df_w['Weight (kg)'].values
-    
-    res_w = stats.linregress(X_w_raw, y_w)
-    slope_w = res_w.slope
-    stderr_w = res_w.stderr
-    
-    monthly_trends['Weight (kg)'] = slope_w * 30 
+    X_w = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values
+    res_w = stats.linregress(X_w, df_w['Weight (kg)'].values)
+    monthly_trends['Weight (kg)'] = res_w.slope * 30 
     
     d_to_end = (target_end_date.date() - df_w['Date'].min().date()).days
     if d_to_end > 0:
         f_days = np.array([[i] for i in range(0, d_to_end + 10)])
-        future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, d_to_end + 10)]
-        
-        pred_y_w = res_w.intercept + slope_w * f_days.flatten()
-        margin_of_error_w = stderr_w * f_days.flatten() * 1.96 
-        
         traj_data['Weight (kg)'] = {
-            'dates': future_dates_w, 
-            'preds': pred_y_w,
-            'upper': pred_y_w + margin_of_error_w,
-            'lower': pred_y_w - margin_of_error_w,
-            'final_error': margin_of_error_w[-10] 
+            'dates': [df_w['Date'].min() + timedelta(days=i) for i in range(0, d_to_end + 10)], 
+            'preds': res_w.intercept + res_w.slope * f_days.flatten(),
+            'final_error': res_w.stderr * f_days.flatten()[-10] * 1.96 
         }
 
 if has_c:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5)
-    X_c_raw = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values
-    X_c = X_c_raw.reshape(-1, 1)
-    
-    d_to_end_c = (target_end_date.date() - df_c['Date'].min().date()).days
-    if d_to_end_c > 0:
-        f_days = np.array([[i] for i in range(0, d_to_end_c + 10)])
-        f_dates = [df_c['Date'].min() + timedelta(days=i) for i in range(0, d_to_end_c + 10)]
+    X_c = df_c['Date'].map(lambda d: (d - df_c['Date'].min()).days).values
+    d_to_end = (target_end_date.date() - df_c['Date'].min().date()).days
+    if d_to_end > 0:
+        f_days = np.array([[i] for i in range(0, d_to_end + 10)])
+        f_dates = [df_c['Date'].min() + timedelta(days=i) for i in range(0, d_to_end + 10)]
         for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
             recent_dfs[m] = df_c
-            y_c = df_c[m].values
-            
-            res_c = stats.linregress(X_c_raw, y_c)
-            slope_c = res_c.slope
-            stderr_c = res_c.stderr
-            
-            monthly_trends[m] = slope_c * 30
-            
-            pred_y_c = res_c.intercept + slope_c * f_days.flatten()
-            margin_of_error_c = stderr_c * f_days.flatten() * 1.96 
-            
-            traj_data[m] = {
-                'dates': f_dates, 
-                'preds': pred_y_c,
-                'upper': pred_y_c + margin_of_error_c,
-                'lower': pred_y_c - margin_of_error_c,
-                'final_error': margin_of_error_c[-10]
-            }
+            res_c = stats.linregress(X_c, df_c[m].values)
+            monthly_trends[m] = res_c.slope * 30
+            traj_data[m] = {'dates': f_dates, 'preds': res_c.intercept + res_c.slope * f_days.flatten(), 'final_error': res_c.stderr * f_days.flatten()[-10] * 1.96}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING
 # ══════════════════════════════════════════════════════════════
+def sgn(v): return "+" if v > 0 else ""
+def dclass(v, invert=False): return "c-ok" if (v > 0 and not invert) or (v < 0 and invert) else ("c-err" if v != 0 else "c-neu")
+
+def eval_metric(metric, actual, profile, mmt=None, bft=None):
+    tgt, lower, upper = profile[metric] if len(profile[metric]) == 3 else (profile[metric][0], profile[metric][1], float('inf'))
+    if metric == 'Weight (kg)' and mmt is not None and bft is not None:
+        if actual > upper and mmt >= (actual * 0.4) and bft <= 0.2: return ('c-ok', 'bg-ok', 'MUSCLE DRIVEN', 'var(--c-emerald)')
+        if actual < lower and mmt >= -0.2 and bft < lower: return ('c-ok', 'bg-ok', 'FAT LOSS DRIVEN', 'var(--c-emerald)')
+    if metric == 'Muscle Mass (kg)':
+        if actual >= tgt: return ('c-ok', 'bg-ok', 'EXCEPTIONAL', 'var(--c-emerald)')
+        if actual >= lower: return ('c-wrn', 'bg-wrn', 'LAGGING', 'var(--c-amber)')
+        return ('c-err', 'bg-err', 'SUB-OPTIMAL', 'var(--c-rose)')
+    if actual > upper: return ('c-err', 'bg-err', 'EXCEEDING LIMIT', 'var(--c-rose)')
+    if actual < lower: return ('c-wrn', 'bg-wrn', 'BELOW TARGET', 'var(--c-amber)')
+    return ('c-ok', 'bg-ok', 'OPTIMAL RANGE', 'var(--c-emerald)')
+
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
+    tgt_rate = profile[metric][0]
+    s = sgn(actual_rate); ts = sgn(tgt_rate)
+    c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
+    
+    is_smart_override = status in ['MUSCLE DRIVEN', 'FAT LOSS DRIVEN']
+    
+    max_bound = max(abs(profile[metric][1]), abs(profile[metric][2]) if len(profile[metric]) > 2 else 0, abs(tgt_rate), abs(actual_rate), 0.1) * 1.3
+    p_l = max(min(((profile[metric][1] + max_bound) / (2 * max_bound)) * 100, 100), 0)
+    p_t = max(min(((tgt_rate + max_bound) / (2 * max_bound)) * 100, 100), 0)
+    
+    if len(profile[metric]) > 2:
+        p_u = max(min(((profile[metric][2] + max_bound) / (2 * max_bound)) * 100, 100), 0)
+        b_html = f"<span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX {profile[metric][2]:.2f}</span>"
+    else:
+        b_html = f"<span style='text-align:left;'>MIN {profile[metric][1]:.2f}</span><span style='color:var(--text-main); font-weight:700;'>TGT {tgt_rate:.2f}</span><span style='text-align:right;'>MAX ∞</span>"
+        
+    bounds_html = f"<div style='display:grid; grid-template-columns: 1fr 1fr 1fr; text-align:center; font-family:\"DM Mono\", monospace; font-size:0.58rem; color:var(--text-subtle); margin-top:6px; font-weight:500;'>{b_html}</div>"
+        
+    pct = ((actual_rate + max_bound) / (2 * max_bound)) * 100
+    pct = max(min(pct, 97), 3)
+    
+    c_g, c_o, c_r = "var(--c-emerald)", "var(--c-amber)", "var(--c-rose)"
+    bg_grad = f"linear-gradient(to right, {c_r} 0%, {c_r} {p_l}%, {c_o} {p_l}%, {c_o} {p_t}%, {c_g} {p_t}%, {c_g} 100%)" if metric == 'Muscle Mass (kg)' else f"linear-gradient(to right, {c_o} 0%, {c_o} {p_l}%, {c_g} {p_l}%, {c_g} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} 100%)"
+    if is_smart_override: bg_grad = f"linear-gradient(to right, {c_o} 0%, {c_o} {p_l}%, {c_g} {p_l}%, {c_g} 100%)" if status == 'MUSCLE DRIVEN' else f"linear-gradient(to right, {c_g} 0%, {c_g} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} {p_u if len(profile[metric]) > 2 else 100}%, {c_r} 100%)"
+
+    return f"""
+    <div class='tj-blk'>
+      <div class='tj-row' style='margin-bottom:10px;'>
+        <span class='tj-nm'>{label}</span>
+        <div style='text-align:right;'>
+          <div style='font-family:\"DM Mono\", monospace; font-size:1.2rem; font-weight:700; color:var(--text-main); line-height:1;'>
+            {s}{actual_rate:.2f} <span style='font-size:0.65rem; color:var(--text-subtle); font-weight:400;'>{unit}</span>
+          </div>
+        </div>
+      </div>
+      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
+      {bounds_html}
+      <div class='tj-st {c_txt}'>{status}</div>
+    </div>"""
+
+def hud_card(kind, icon, title, desc):
+    color_map = {'c-ok': 'var(--c-emerald)', 'c-wrn': 'var(--c-amber)', 'c-err': 'var(--c-rose)', 'c-neu': 'var(--text-muted)'}
+    border_color = color_map.get(kind, 'var(--border)')
+    return f"<div class='hud-card' style='border-left: 3px solid {border_color};'><div class='hud-icon'>{icon}</div><div><div class='hud-title' style='color:{border_color};'>{title}</div><div class='hud-desc'>{desc}</div></div></div>"
+
 active_goal = st.session_state['current_goal']
 ideal_rates = DEFAULT_PROFILES.get(active_goal, DEFAULT_PROFILES['Lean Bulk'])
 
 header_ph = st.empty()
-app_view = st.radio("Nav", ["Entry", "Nutrition", "Trends", "Analysis", "Data", "Settings"], horizontal=True, label_visibility="collapsed")
+app_view = st.radio("Nav", ["Entry", "Workouts", "Nutrition", "Trends", "Analysis", "Data", "Settings"], horizontal=True, label_visibility="collapsed")
 
 header_ph.markdown(f"""
 <div class="app-bar">
-    <div>
-        <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 2</div>
-    </div>
+    <div><div class="wordmark">Metrics</div><div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 2</div></div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
 """, unsafe_allow_html=True)
@@ -657,6 +544,36 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
+# WORKOUTS TAB
+# ══════════════════════════════════════════════════════════════
+elif app_view == "Workouts":
+    st.markdown('<div class="s-head" style="margin-top:0;">Log Session</div>', unsafe_allow_html=True)
+    
+    routine = st.selectbox("Select Routine", list(ROUTINES.keys()))
+    exercise = st.selectbox("Select Exercise", ROUTINES[routine])
+    
+    ex_hist = workout_df[(workout_df['Workout Type'] == routine) & (workout_df['Exercise'] == exercise)]
+    if not ex_hist.empty:
+        last_log = ex_hist.iloc[-1]
+        st.markdown(f"<div style='font-family:\"DM Mono\", monospace; font-size:0.75rem; color:var(--text-subtle); margin-bottom:1rem;'>Last Session ({last_log['Date'].strftime('%d %b')}): <strong style='color:var(--text-main);'>{last_log['Weight']}kg | {last_log['Set']} Sets x {last_log['Reps']} Reps</strong></div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='font-family:\"DM Mono\", monospace; font-size:0.75rem; color:var(--text-subtle); margin-bottom:1rem;'>No previous history found for this exercise.</div>", unsafe_allow_html=True)
+        
+    with st.form("workout_form", border=False):
+        c1, c2, c3 = st.columns(3)
+        with c1: weight = st.number_input("Weight (kg)", min_value=0.0, step=0.5, format="%.1f")
+        with c2: sets = st.number_input("Sets", min_value=1, step=1, value=2)
+        with c3: reps = st.number_input("Reps", min_value=1, step=1, value=10)
+        
+        if st.form_submit_button("Log Exercise", use_container_width=True):
+            if append_workout_rows(st.session_state['sheet_url'], [[datetime.now().strftime('%Y-%m-%d'), routine, exercise, weight, sets, reps]]):
+                system_alert("Exercise Logged")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Failed to save. Ensure you created a 'Workouts' tab in your Google Sheet!")
+
+# ══════════════════════════════════════════════════════════════
 # NUTRITION TAB (Dynamically calculated based on Body Tab Constants)
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
@@ -706,7 +623,7 @@ elif app_view == "Nutrition":
     w_t, w_min, w_max = ideal_rates['Weight (kg)']
     
     if len(df) < 5:
-        st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data to provide adaptive calorie adjustments."), unsafe_allow_html=True)
+        st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data to provide adaptive calorie adjustments."))
     else:
         if wt_trend > w_max:
             st.markdown(hud_card("c-err", "↓", "Pace Too Fast", f"Gaining {wt_trend:.2f} kg/mo (Limit: {w_max} kg). Recommend lowering intake by 200 kcal."), unsafe_allow_html=True)
@@ -730,7 +647,7 @@ elif app_view == "Nutrition":
             st.markdown(hud_card("c-ok", "✓", "Pace Locked In", f"Weight trend ({wt_trend:.2f} kg/mo) is exactly within protocol bounds. Maintain current intake."), unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# TRENDS
+# TRENDS & ANALYSIS TABS
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Trends":
     if not has_w: st.stop()
@@ -779,9 +696,6 @@ elif app_view == "Trends":
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════
-# ANALYSIS
-# ══════════════════════════════════════════════════════════════
 elif app_view == "Analysis":
     if not has_w: st.stop()
     w, bf, mm = df.iloc[-1]['Weight (kg)'], df.iloc[-1]['Body Fat (%)'], df.iloc[-1]['Muscle Mass (kg)']
@@ -815,13 +729,11 @@ elif app_view == "Analysis":
     for d in diags: st.markdown(d, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# DATA
+# DATA TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Data":
     st.markdown('<div class="s-head" style="margin-top:0;">Record History</div>', unsafe_allow_html=True)
     st.markdown("""<div class="hist-header"><div>Date</div><div style="text-align:right;">Weight</div><div style="text-align:right;">Muscle</div><div style="text-align:right;">Fat</div><div></div></div>""", unsafe_allow_html=True)
-    
-    seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
     for i in range(len(df)-1, max(-1, len(df)-21), -1):
         row = df.iloc[i]
@@ -848,16 +760,15 @@ elif app_view == "Data":
         if pd.Timestamp(row['Date']) >= pd.Timestamp(datetime.now() - timedelta(days=7)):
             st.markdown("<div style='margin-left:auto;' class='del-btn'>", unsafe_allow_html=True)
             if st.button("✕", key=f"del_{i}"):
-                new_df = df.drop(index=i).reset_index(drop=True)
-                overwrite_body_sheet(st.session_state['sheet_url'], new_df)
-                st.session_state['active_df'] = new_df
+                overwrite_body_sheet(st.session_state['sheet_url'], df.drop(index=i).reset_index(drop=True))
+                st.session_state['active_df'] = df.drop(index=i).reset_index(drop=True)
                 load_data.clear()
                 st.rerun()
             st.markdown("</div></div>", unsafe_allow_html=True)
         else: st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# SETTINGS
+# SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Physiology (Read-Only)</div>', unsafe_allow_html=True)
@@ -905,19 +816,3 @@ elif app_view == "Settings":
         st.session_state['theme_pref'] = new_theme
         st.query_params.theme = new_theme
         st.rerun()
-
-    st.markdown('<div class="settings-lbl">Features</div>', unsafe_allow_html=True)
-    st.session_state['enable_quotes'] = st.toggle("Motivational Quotes", value=st.session_state.get('enable_quotes', True))
-    
-    if st.session_state.get('is_admin'):
-        st.markdown('<div class="settings-lbl" style="color:var(--c-rose);">Admin Console</div>', unsafe_allow_html=True)
-        if st.button("Switch Profile", use_container_width=True):
-            st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
-            st.session_state['auth_status'] = False
-            st.session_state['current_user'] = None
-            st.session_state['sheet_url'] = ""
-            if 'active_df' in st.session_state:
-                del st.session_state['active_df']
-            st.query_params.clear()
-            st.cache_data.clear()
-            st.rerun()
