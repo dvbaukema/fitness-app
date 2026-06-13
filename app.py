@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Alpha 1",
+    page_title="METRICS | Beta 2",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -24,13 +24,13 @@ st.set_page_config(
 def system_alert(message, kind="ok"):
     bg = "var(--c-emerald)" if kind == "ok" else "var(--c-rose)"
     ph = st.empty()
-    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"Inter\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
+    html_str = f"<div style='position:fixed; top:30px; left:50%; transform:translateX(-50%); background:{bg}; color:var(--bg-primary); padding:15px 40px; border-radius:30px; font-weight:800; font-family:\"DM Sans\", sans-serif; z-index:99999; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:1.5px; font-size: 0.85rem;'>{message}</div>"
     ph.markdown(html_str, unsafe_allow_html=True)
     time.sleep(1.2)
     ph.empty()
 
 # ══════════════════════════════════════════════════════════════
-# HARDCODED PROTOCOL TARGETS & MULTIPLIERS
+# HARDCODED PROTOCOL TARGETS
 # ══════════════════════════════════════════════════════════════
 DEFAULT_PROFILES = {
     "Aggressive Cut":  {'Weight (kg)': [-3.0, -4.0, -2.0], 'Muscle Mass (kg)': [-0.2, -0.5], 'Body Fat (%)': [-1.2, -1.8, -0.6]},
@@ -93,32 +93,21 @@ def extract_sheet_id(url):
     if re.match(r'^[a-zA-Z0-9-_]{20,}$', url): return url
     return None
 
-def read_sheet_range(sheet_url, range_name):
+def load_body_constants(sheet_url):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: return pd.DataFrame()
-    try:
-        res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
-        vals = res.get('values', [])
-        if len(vals) < 2: return pd.DataFrame()
-        headers = vals[0]
-        data = vals[1:]
-        return pd.DataFrame(data, columns=headers)
-    except HttpError:
-        return pd.DataFrame()
-
-def load_body_constants(sheet_url):
-    df = read_sheet_range(sheet_url, 'Body!A:C')
-    if df.empty:
+    if not service or not sheet_id: 
         return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
-        row = df.iloc[0]
-        # Strict order: Height, Gender, Age
-        h = float(row.iloc[0]) if len(row) > 0 else 180.0
-        g = str(row.iloc[1]).lower().strip() if len(row) > 1 else 'male'
-        a = int(float(row.iloc[2])) if len(row) > 2 else 25
+        res = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='Body!A:C').execute()
+        vals = res.get('values', [])
+        if len(vals) < 2: return {'height': 180.0, 'gender': 'male', 'age': 25}
+        row = vals[1]
+        h = float(row[0]) if len(row) > 0 else 180.0
+        g = str(row[1]).lower().strip() if len(row) > 1 else 'male'
+        a = int(float(row[2])) if len(row) > 2 else 25
         return {'height': h, 'gender': g, 'age': a}
-    except:
+    except Exception:
         return {'height': 180.0, 'gender': 'male', 'age': 25}
 
 def read_gsheet(sheet_url):
@@ -126,7 +115,7 @@ def read_gsheet(sheet_url):
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
     try:
-        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='A:E').execute()
+        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range='Data!A:E').execute()
         values = result.get('values', [])
         if not values or len(values) < 2: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
         headers = values[0]
@@ -151,22 +140,7 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
         time_str = time_now.strftime('%H:%M:%S')
         values = [[date_str, time_str, weight, body_fat, muscle_mass]]
         body = {'values': values}
-        service.spreadsheets().values().append(spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
-        return True
-    except HttpError:
-        return False
-
-def delete_row_from_gsheet(sheet_url, row_index_to_delete):
-    service = get_google_sheets_service()
-    sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: return False
-    try:
-        sheet_row_index = row_index_to_delete + 1 
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
-        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
-        body = {'requests': requests}
-        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
+        service.spreadsheets().values().append(spreadsheetId=sheet_id, range='Data!A:E', valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
         return True
     except HttpError:
         return False
@@ -176,13 +150,13 @@ def overwrite_gsheet(sheet_url, df):
     sheet_id = extract_sheet_id(sheet_url)
     if not service or not sheet_id: return False
     try:
-        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='A:Z').execute()
+        service.spreadsheets().values().clear(spreadsheetId=sheet_id, range='Data!A:E').execute()
         values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
         for _, row in df.iterrows():
             d = pd.Timestamp(row['Date'])
             values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
         body = {'values': values}
-        service.spreadsheets().values().update(spreadsheetId=sheet_id, range='A:E', valueInputOption='USER_ENTERED', body=body).execute()
+        service.spreadsheets().values().update(spreadsheetId=sheet_id, range='Data!A:E', valueInputOption='USER_ENTERED', body=body).execute()
         return True
     except HttpError:
         return False
@@ -233,23 +207,17 @@ if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = 
 
 if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
 if 'theme_pref' not in st.session_state: st.session_state['theme_pref'] = st.query_params.get("theme", "System")
-
 if 'activity_level' not in st.session_state: st.session_state['activity_level'] = st.query_params.get("activity", "Moderate (3-5 days/wk)")
 if 'calorie_offset' not in st.session_state: st.session_state['calorie_offset'] = int(st.query_params.get("calorie_offset", 0))
 if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] = int(st.query_params.get("protein_custom", 160))
 
 if 'gym_start_date' not in st.session_state:
     st.session_state['gym_start_date'] = pd.to_datetime(st.query_params.get("gym_start", '2026-03-17')).date()
-
 if 'analysis_start_date' not in st.session_state:
     default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
 if 'target_end_date' not in st.session_state:
-    default_end = '2026-09-01'
-    st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
-
-if st.session_state['auth_status'] and 'body_constants' not in st.session_state:
-    st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
+    st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", '2026-09-01')).date()
 
 # ══════════════════════════════════════════════════════════════
 # CSS — COMPLETE DESIGN OVERHAUL
@@ -730,6 +698,18 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 /* ══════════════════════════════
    HISTORY ROWS
 ══════════════════════════════ */
+.hist-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease;
+}
+.hist-row:hover { box-shadow: var(--shadow-md); }
 .del-btn button {
     background: transparent !important;
     border: none !important;
@@ -792,7 +772,7 @@ div[data-testid="stSlider"] > div > div > div {
 div[data-testid="stSlider"] div[role="slider"] {
   width: 22px !important;
   height: 22px !important;
-  background: var(--c-blue) !important;
+  background: var(--text-main) !important;
   border: 3px solid var(--bg-primary) !important;
   box-shadow: var(--shadow-md) !important;
 }
@@ -955,10 +935,11 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 """
+
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTHENTICATION
+# AUTO‑LOGIN via URL parameter
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
@@ -971,7 +952,6 @@ if not st.session_state['auth_status']:
             st.session_state['current_user'] = saved_user
             st.session_state['sheet_url'] = USER_DATA[saved_user]
             st.session_state['is_admin'] = False
-            st.rerun()
         else:
             st.query_params.clear()
             st.error("🔒 Access Denied. Invalid link.")
@@ -1010,11 +990,12 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url): 
-    return load_body_data(url)
+    return read_gsheet(url)
 
 try:
     df = load_data(st.session_state['sheet_url'])
-    st.session_state['active_df'] = df
+    if 'active_df' not in st.session_state:
+        st.session_state['active_df'] = df
 except Exception as e:
     st.error(f"System Error: Could not load data. {str(e)}")
     st.stop()
@@ -1024,6 +1005,7 @@ df = st.session_state['active_df']
 if st.session_state['auth_status'] and 'body_constants' not in st.session_state:
     st.session_state['body_constants'] = load_body_constants(st.session_state['sheet_url'])
 
+GOAL_PROFILES = st.session_state['goal_profiles']
 METRICS = ['Weight (kg)', 'Muscle Mass (kg)', 'Body Fat (%)']
 METRIC_SHORT = {'Weight (kg)': 'Body Weight', 'Muscle Mass (kg)': 'Muscle Mass', 'Body Fat (%)': 'Body Fat'}
 METRIC_UNIT  = {'Weight (kg)': 'kg', 'Muscle Mass (kg)': 'kg', 'Body Fat (%)': '%'}
@@ -1106,8 +1088,10 @@ if has_enough_comp_data:
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
+if "goal" in st.query_params: st.session_state['current_goal'] = st.query_params.get("goal")
+
 active_goal = st.session_state.get('current_goal', 'Lean Bulk')
-ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_state['goal_profiles']['Lean Bulk'])
+ideal_rates = GOAL_PROFILES.get(active_goal, GOAL_PROFILES['Lean Bulk'])
 
 header_placeholder = st.empty()
 
@@ -1133,7 +1117,7 @@ if app_view == "Entry":
             st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
         st.markdown(f"<div class='quote-box'><div class='quote-text'>\"{st.session_state['daily_quote']}\"</div></div>", unsafe_allow_html=True)
 
-    selected = st.selectbox("Protocol", list(st.session_state['goal_profiles'].keys()), index=list(st.session_state['goal_profiles'].keys()).index(active_goal))
+    selected = st.selectbox("Protocol", list(GOAL_PROFILES.keys()), index=list(GOAL_PROFILES.keys()).index(active_goal))
     if selected != st.session_state['current_goal']:
         st.session_state['current_goal'] = selected
         st.query_params.goal = selected
@@ -1180,7 +1164,7 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Note: Placed OUTSIDE a form to allow real-time updating between inputs
+    # Note: Placed OUTSIDE the form to allow real-time reactivity
     w_val = float(last['Weight (kg)'])
     w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
     
@@ -1199,17 +1183,18 @@ if app_view == "Entry":
     bf_val = float(last['Body Fat (%)'])
     bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
 
-    if st.button("Save Record", use_container_width=True):
-        now = datetime.now()
-        date_str = now.strftime('%Y-%m-%d')
-        append_body_entry(st.session_state['sheet_url'], date_str, w, m, bf)
-        new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
-        st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
-        load_data.clear()
-        if st.session_state['enable_quotes']:
-            st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
-        system_alert("Saved")
-        st.rerun()
+    with st.form("log_form", border=False):
+        if st.form_submit_button("Save Record", use_container_width=True):
+            now = datetime.now()
+            date_str = now.strftime('%Y-%m-%d')
+            append_to_gsheet(st.session_state['sheet_url'], date_str, w, m, bf)
+            new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
+            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
+            load_data.clear()
+            if st.session_state['enable_quotes']:
+                st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
+            system_alert("Saved")
+            st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # NUTRITION TAB
@@ -1227,7 +1212,6 @@ elif app_view == "Nutrition":
     cal_offset = int(st.session_state['calorie_offset'])
     custom_prot = int(st.session_state['protein_custom'])
     
-    # Mifflin-St Jeor
     if g_curr == "male": 
         bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) + 5
     else: 
@@ -1326,25 +1310,21 @@ elif app_view == "Trends":
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"Inter\", sans-serif; font-size:0.75rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
+            proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
         st.markdown(f"""
         <div class="chart-blk">
-            <div class="chart-meta" style="align-items: flex-start;">
+            <div class="chart-meta">
                 <div>
-                    <div style="font-size:0.9rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">
-                        {METRIC_SHORT[metric]} 
-                        <span style="font-family:'Inter', sans-serif; font-weight:800; color:var(--text-main); margin-left:8px; font-size:1.5rem;">
-                            {last_val:.1f} <span style="font-size:0.9rem; color:var(--text-muted);">{unit}</span>
-                        </span>
-                    </div>
+                    <div style="font-size:0.7rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:1.5px; font-family:'DM Mono',monospace;">{METRIC_SHORT[metric]}</div>
+                    <div style="font-size:2rem; font-weight:700; color:var(--text-main); line-height:1.1; margin-top:2px; font-family:'DM Mono',monospace;">{last_val:.1f}<span style="font-size:0.9rem; color:var(--text-subtle); font-weight:400; margin-left:3px;">{unit}</span></div>
                     {proj_html}
                 </div>
-                <div style="text-align: right;">
-                    <span class="t-chip {c_bg} {c_txt}" style="margin-bottom:4px;">ACTUAL {sgn(trend)}{trend:.2f} /mo</span><br>
-                    <span class="t-chip bg-neu c-neu">TARGET {sgn(target)}{target:.2f} /mo</span>
+                <div style="text-align: right; display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
+                    <span class="t-chip {c_txt}" style="display:block;">{sgn(trend)}{trend:.2f}/mo</span>
+                    <span class="t-chip c-neu" style="display:block;">TGT {sgn(target)}{target:.2f}</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -1355,8 +1335,8 @@ elif app_view == "Trends":
         fig.add_trace(go.Scatter(
             x=df_hist['Date'], y=df_hist[metric],
             mode='lines+markers', name='History',
-            line=dict(color='rgba(150,150,150,0.4)', width=1.5),
-            marker=dict(size=4, color='rgba(150,150,150,0.4)'),
+            line=dict(color='rgba(128,128,128,0.2)', width=1.5),
+            marker=dict(size=3, color='rgba(128,128,128,0.25)'),
             hoverinfo='skip'
         ))
         
@@ -1370,7 +1350,9 @@ elif app_view == "Trends":
         ))
         
         epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="#888888", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="#888888")
+        fig.add_vline(x=epoch_date, line_width=1.5, line_dash="solid", line_color="rgba(128,128,128,0.4)",
+                      annotation_text="START", annotation_position="bottom right",
+                      annotation_font_size=9, annotation_font_color="rgba(128,128,128,0.6)")
         
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
@@ -1390,24 +1372,57 @@ elif app_view == "Trends":
         if days_span > 0:
             target_val_at_end = start_y + (daily_rate * days_span)
             
-            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="#10B981")
-            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="Inter"), hoverinfo='skip'))
-            fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
+            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981",
+                          annotation_text=end_label, annotation_position="top left",
+                          annotation_font_size=9, annotation_font_color="#10B981")
+            
+            fig.add_trace(go.Scatter(
+                x=[target_end_date], y=[target_val_at_end],
+                mode='markers+text', name=f'{end_label} Goal',
+                marker=dict(size=8, color='#10B981', symbol='diamond', line=dict(width=1.5, color='white')),
+                text=[f"{target_val_at_end:.1f}{unit}"],
+                textposition="middle right",
+                textfont=dict(color="#10B981", size=10, family="DM Mono"),
+                hoverinfo='skip'
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=[start_x, target_end_date], y=[start_y, target_val_at_end],
+                mode='lines', name='Target Path',
+                line=dict(color='rgba(128,128,128,0.4)', width=1.5, dash='dot'),
+                hoverinfo='skip'
+            ))
 
         if 'dates' in traj_data.get(metric, {}):
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
             
-            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
-            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
+            fig.add_trace(go.Scatter(
+                x=x_vals + x_vals[::-1],
+                y=list(y_upper) + list(y_lower)[::-1],
+                fill='toself',
+                fillcolor='rgba(128,128,128,0.06)',
+                line=dict(color='rgba(0,0,0,0)'),
+                hoverinfo="skip", showlegend=False
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=x_vals, y=traj_data[metric]['preds'],
+                mode='lines', name='Trajectory',
+                line=dict(color=hex_col, width=2, dash='dash'),
+                hoverinfo='skip'
+            ))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
-            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
+            margin=dict(l=0, r=0, t=16, b=40), height=195, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.3, xanchor="center", x=0.5,
+                       font=dict(size=9, color='rgba(128,128,128,0.6)'), bgcolor='rgba(0,0,0,0)'),
+            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d',
+                      range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.08)', zeroline=False,
+                      tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1602,7 +1617,7 @@ elif app_view == "Data":
                 st.markdown("<div class='del-btn'>", unsafe_allow_html=True)
                 if st.button("✕", key=f"del_{i}"):
                     new_df = df.drop(index=i).reset_index(drop=True)
-                    overwrite_body_sheet(st.session_state['sheet_url'], new_df)
+                    overwrite_gsheet(st.session_state['sheet_url'], new_df)
                     st.session_state['active_df'] = new_df
                     load_data.clear()
                     system_alert("Deleted", "err")
@@ -1615,11 +1630,13 @@ elif app_view == "Data":
 # SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
+    header_placeholder.empty()
+
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.95rem; font-weight:600; color:var(--text-muted); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
     
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Physiology (Read-Only)</div>', unsafe_allow_html=True)
-    bc = st.session_state.get('body_constants', {'height': 180, 'gender': 'male', 'age': 25})
+    bc = st.session_state.get('body_constants', {'height': 180.0, 'gender': 'male', 'age': 25})
     
     st.markdown(f"""
     <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; justify-content:space-between; margin-bottom:1.5rem; font-family:'DM Mono', monospace; font-size:0.8rem;">
