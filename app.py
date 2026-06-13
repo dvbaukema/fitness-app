@@ -57,37 +57,14 @@ st.markdown("""
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
     
-    const savedUser = localStorage.getItem('metrics_user');
-    if (savedUser && !urlParams.has('user')) { urlParams.set('user', savedUser); redirect = true; } 
-    else if (urlParams.has('user')) { localStorage.setItem('metrics_user', urlParams.get('user')); }
+    const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset', 'gym_start'];
     
-    const savedGoal = localStorage.getItem('metrics_goal');
-    if (savedGoal && !urlParams.has('goal')) { urlParams.set('goal', savedGoal); redirect = true; } 
-    else if (urlParams.has('goal')) { localStorage.setItem('metrics_goal', urlParams.get('goal')); }
-    
-    const savedStart = localStorage.getItem('metrics_start');
-    if (savedStart && !urlParams.has('start')) { urlParams.set('start', savedStart); redirect = true; } 
-    else if (urlParams.has('start')) { localStorage.setItem('metrics_start', urlParams.get('start')); }
-
-    const savedEnd = localStorage.getItem('metrics_end');
-    if (savedEnd && !urlParams.has('end')) { urlParams.set('end', savedEnd); redirect = true; } 
-    else if (urlParams.has('end')) { localStorage.setItem('metrics_end', urlParams.get('end')); }
-
-    const savedTheme = localStorage.getItem('metrics_theme');
-    if (savedTheme && !urlParams.has('theme')) { urlParams.set('theme', savedTheme); redirect = true; } 
-    else if (urlParams.has('theme')) { localStorage.setItem('metrics_theme', urlParams.get('theme')); }
-
-    const savedActivity = localStorage.getItem('metrics_activity');
-    if (savedActivity && !urlParams.has('activity')) { urlParams.set('activity', savedActivity); redirect = true; } 
-    else if (urlParams.has('activity')) { localStorage.setItem('metrics_activity', urlParams.get('activity')); }
-
-    const savedProt = localStorage.getItem('metrics_protein_custom');
-    if (savedProt && !urlParams.has('protein_custom')) { urlParams.set('protein_custom', savedProt); redirect = true; } 
-    else if (urlParams.has('protein_custom')) { localStorage.setItem('metrics_protein_custom', urlParams.get('protein_custom')); }
-
-    const savedOffset = localStorage.getItem('metrics_calorie_offset');
-    if (savedOffset && !urlParams.has('calorie_offset')) { urlParams.set('calorie_offset', savedOffset); redirect = true; } 
-    else if (urlParams.has('calorie_offset')) { localStorage.setItem('metrics_calorie_offset', urlParams.get('calorie_offset')); }
+    keys.forEach(k => {
+        const sk = 'metrics_' + k;
+        const val = localStorage.getItem(sk);
+        if (val && !urlParams.has(k)) { urlParams.set(k, val); redirect = true; } 
+        else if (urlParams.has(k)) { localStorage.setItem(sk, urlParams.get(k)); }
+    });
 
     if (redirect) {
         const newUrl = window.location.origin + window.location.pathname + '?' + urlParams.toString();
@@ -179,6 +156,21 @@ def append_to_gsheet(sheet_url, date_str, weight, muscle_mass, body_fat):
     except HttpError:
         return False
 
+def delete_row_from_gsheet(sheet_url, row_index_to_delete):
+    service = get_google_sheets_service()
+    sheet_id = extract_sheet_id(sheet_url)
+    if not service or not sheet_id: return False
+    try:
+        sheet_row_index = row_index_to_delete + 1 
+        sheet_metadata = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        tab_id = sheet_metadata.get('sheets', [])[0].get('properties', {}).get('sheetId', 0)
+        requests = [{"deleteDimension": {"range": {"sheetId": tab_id, "dimension": "ROWS", "startIndex": sheet_row_index, "endIndex": sheet_row_index + 1}}}]
+        body = {'requests': requests}
+        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
+        return True
+    except HttpError:
+        return False
+
 def overwrite_gsheet(sheet_url, df):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
@@ -237,7 +229,6 @@ if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 if 'all_quotes' not in st.session_state: st.session_state['all_quotes'] = DEFAULT_QUOTES
 if 'enable_quotes' not in st.session_state: st.session_state['enable_quotes'] = True
 if 'enable_achievements' not in st.session_state: st.session_state['enable_achievements'] = True
-if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = datetime(2026, 3, 17).date()
 if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
 if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", "Lean Bulk")
@@ -246,6 +237,9 @@ if 'theme_pref' not in st.session_state: st.session_state['theme_pref'] = st.que
 if 'activity_level' not in st.session_state: st.session_state['activity_level'] = st.query_params.get("activity", "Moderate (3-5 days/wk)")
 if 'calorie_offset' not in st.session_state: st.session_state['calorie_offset'] = int(st.query_params.get("calorie_offset", 0))
 if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] = int(st.query_params.get("protein_custom", 160))
+
+if 'gym_start_date' not in st.session_state:
+    st.session_state['gym_start_date'] = pd.to_datetime(st.query_params.get("gym_start", '2026-03-17')).date()
 
 if 'analysis_start_date' not in st.session_state:
     default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
@@ -686,13 +680,13 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 }
 .tier-item.completed {
   background: var(--c-blue-bg);
-  border-color: rgba(96,165,250,0.25);
+  border-color: rgba(37,99,235,0.25);
 }
 .tier-item.completed .tier-name { color: var(--c-blue); }
 .tier-item.current {
   background: var(--c-blue-soft);
   border-color: var(--c-blue);
-  box-shadow: 0 4px 20px rgba(96,165,250,0.15);
+  box-shadow: 0 4px 20px rgba(37,99,235,0.15);
 }
 .tier-item.locked { opacity: 0.35; }
 .tier-emoji {
@@ -736,45 +730,13 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 /* ══════════════════════════════
    HISTORY ROWS
 ══════════════════════════════ */
-.hist-row {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s ease;
-}
-.hist-row:hover { box-shadow: var(--shadow-md); }
-.hist-date {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.68rem;
-  color: var(--text-subtle);
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-.hist-vals {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.8rem;
-  color: var(--text-main);
-  font-weight: 600;
-}
-.hist-sep {
-  color: var(--border-strong);
-  margin: 0 6px;
-  font-weight: 300;
-}
 .del-btn button {
     background: transparent !important;
     border: none !important;
     color: var(--text-subtle) !important;
     font-family: 'DM Sans', sans-serif !important;
     font-weight: 600 !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 1px !important;
-    text-transform: uppercase !important;
+    font-size: 1.2rem !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
@@ -830,7 +792,7 @@ div[data-testid="stSlider"] > div > div > div {
 div[data-testid="stSlider"] div[role="slider"] {
   width: 22px !important;
   height: 22px !important;
-  background: var(--text-main) !important;
+  background: var(--c-blue) !important;
   border: 3px solid var(--bg-primary) !important;
   box-shadow: var(--shadow-md) !important;
 }
@@ -996,7 +958,7 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] {
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN via URL parameter
+# AUTHENTICATION
 # ══════════════════════════════════════════════════════════════
 if not st.session_state['auth_status']:
     saved_user = st.query_params.get("user", None)
@@ -1009,6 +971,7 @@ if not st.session_state['auth_status']:
             st.session_state['current_user'] = saved_user
             st.session_state['sheet_url'] = USER_DATA[saved_user]
             st.session_state['is_admin'] = False
+            st.rerun()
         else:
             st.query_params.clear()
             st.error("🔒 Access Denied. Invalid link.")
@@ -1070,6 +1033,7 @@ target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
 df_window_full = df[df['Date'] >= analysis_start].copy()
+
 has_enough_weight_data = len(df_window_full) >= 3 or len(df) >= 3
 has_enough_comp_data = len(df_window_full) >= 5 or len(df) >= 5
 
@@ -1154,7 +1118,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Alpha 1</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 2</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1216,25 +1180,36 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
-    with st.form("log_form", border=False):
-        w_val = float(last['Weight (kg)'])
-        w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
+    # Note: Placed OUTSIDE a form to allow real-time updating between inputs
+    w_val = float(last['Weight (kg)'])
+    w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
+    
+    st.markdown("<div style='margin-top: 15px; margin-bottom: -15px; font-family:\"DM Mono\", monospace; font-size: 0.65rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px;'>Muscle Mass Input Mode</div>", unsafe_allow_html=True)
+    mm_mode = st.radio("Muscle Mass Input Mode", ["Kilograms (kg)", "Percentage (%)"], horizontal=True, label_visibility="collapsed")
+    
+    if mm_mode == "Kilograms (kg)":
         m_val = float(last['Muscle Mass (kg)'])
         m = st.slider("Muscle Mass (kg)", min_value=max(0.0, m_val-2.5), max_value=m_val+2.5, value=m_val, step=0.1)
-        bf_val = float(last['Body Fat (%)'])
-        bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
+    else:
+        current_pct = (last['Muscle Mass (kg)'] / last['Weight (kg)']) * 100 if last['Weight (kg)'] > 0 else 45.0
+        m_pct = st.slider("Muscle Mass (%)", min_value=max(0.0, current_pct-5.0), max_value=current_pct+5.0, value=current_pct, step=0.1)
+        m = w * (m_pct / 100.0)
+        st.markdown(f"<div style='text-align:right; font-family:\"DM Mono\", monospace; font-size:0.75rem; color:var(--text-subtle); margin-top:-10px; margin-bottom:10px;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
 
-        if st.form_submit_button("Save Record", use_container_width=True):
-            now = datetime.now()
-            date_str = now.strftime('%Y-%m-%d')
-            append_body_entry(st.session_state['sheet_url'], date_str, w, m, bf)
-            new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
-            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
-            load_data.clear()
-            if st.session_state['enable_quotes']:
-                st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
-            system_alert("Saved")
-            st.rerun()
+    bf_val = float(last['Body Fat (%)'])
+    bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
+
+    if st.button("Save Record", use_container_width=True):
+        now = datetime.now()
+        date_str = now.strftime('%Y-%m-%d')
+        append_body_entry(st.session_state['sheet_url'], date_str, w, m, bf)
+        new_row = pd.DataFrame({'Date': [now], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})
+        st.session_state['active_df'] = pd.concat([st.session_state['active_df'], new_row], ignore_index=True)
+        load_data.clear()
+        if st.session_state['enable_quotes']:
+            st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
+        system_alert("Saved")
+        st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # NUTRITION TAB
@@ -1287,12 +1262,22 @@ elif app_view == "Nutrition":
     st.markdown('<div class="s-head">Adaptive Engine</div>', unsafe_allow_html=True)
     
     wt_trend = monthly_trends.get('Weight (kg)', 0)
+    mmt = monthly_trends.get('Muscle Mass (kg)', 0)
+    bft = monthly_trends.get('Body Fat (%)', 0)
     w_t, w_min, w_max = ideal_rates['Weight (kg)']
     
+    is_muscle_driven = (wt_trend > w_max) and has_enough_comp_data and (mmt >= (wt_trend * 0.4)) and (bft <= 0.2)
+    bf_lower = ideal_rates['Body Fat (%)'][1] if len(ideal_rates['Body Fat (%)']) > 1 else -99
+    is_fat_loss_driven = (wt_trend < w_min) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
+
     if len(df_window_full) < 5:
         st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data since the Start Date to provide adaptive calorie adjustments."), unsafe_allow_html=True)
     else:
-        if wt_trend > w_max:
+        if is_muscle_driven:
+            st.markdown(hud_card("c-ok", "🧬", "Hyper-Anabolic Response", f"Weight is increasing rapidly (+{wt_trend:.2f} kg/mo), but it is heavily driven by muscle gain (+{mmt:.2f} kg/mo). Do not cut calories. Ride this muscle memory wave."), unsafe_allow_html=True)
+        elif is_fat_loss_driven:
+            st.markdown(hud_card("c-ok", "🔥", "Hyper-Lipolytic Response", f"Weight is dropping fast ({wt_trend:.2f} kg/mo), but muscle is preserved and fat is melting (-{abs(bft):.2f} %/mo). Excellent recomposition. Maintain current intake."), unsafe_allow_html=True)
+        elif wt_trend > w_max:
             st.markdown(hud_card("c-err", "↓", "Pace Too Fast", f"Gaining {wt_trend:.2f} kg/mo (Limit: {w_max} kg). Recommend lowering intake by 200 kcal."), unsafe_allow_html=True)
             if st.button("Accept & Lower Calories by 200", use_container_width=True):
                 st.session_state['calorie_offset'] -= 200
@@ -1341,21 +1326,25 @@ elif app_view == "Trends":
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
+            proj_html = f"<div style='font-family:\"Inter\", sans-serif; font-size:0.75rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
         st.markdown(f"""
         <div class="chart-blk">
-            <div class="chart-meta">
+            <div class="chart-meta" style="align-items: flex-start;">
                 <div>
-                    <div style="font-size:0.7rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:1.5px; font-family:'DM Mono',monospace;">{METRIC_SHORT[metric]}</div>
-                    <div style="font-size:2rem; font-weight:700; color:var(--text-main); line-height:1.1; margin-top:2px; font-family:'DM Mono',monospace;">{last_val:.1f}<span style="font-size:0.9rem; color:var(--text-subtle); font-weight:400; margin-left:3px;">{unit}</span></div>
+                    <div style="font-size:0.9rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">
+                        {METRIC_SHORT[metric]} 
+                        <span style="font-family:'Inter', sans-serif; font-weight:800; color:var(--text-main); margin-left:8px; font-size:1.5rem;">
+                            {last_val:.1f} <span style="font-size:0.9rem; color:var(--text-muted);">{unit}</span>
+                        </span>
+                    </div>
                     {proj_html}
                 </div>
-                <div style="text-align: right; display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
-                    <span class="t-chip {c_txt}" style="display:block;">{sgn(trend)}{trend:.2f}/mo</span>
-                    <span class="t-chip c-neu" style="display:block;">TGT {sgn(target)}{target:.2f}</span>
+                <div style="text-align: right;">
+                    <span class="t-chip {c_bg} {c_txt}" style="margin-bottom:4px;">ACTUAL {sgn(trend)}{trend:.2f} /mo</span><br>
+                    <span class="t-chip bg-neu c-neu">TARGET {sgn(target)}{target:.2f} /mo</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -1366,8 +1355,8 @@ elif app_view == "Trends":
         fig.add_trace(go.Scatter(
             x=df_hist['Date'], y=df_hist[metric],
             mode='lines+markers', name='History',
-            line=dict(color='rgba(128,128,128,0.2)', width=1.5),
-            marker=dict(size=3, color='rgba(128,128,128,0.25)'),
+            line=dict(color='rgba(150,150,150,0.4)', width=1.5),
+            marker=dict(size=4, color='rgba(150,150,150,0.4)'),
             hoverinfo='skip'
         ))
         
@@ -1381,9 +1370,7 @@ elif app_view == "Trends":
         ))
         
         epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=1.5, line_dash="solid", line_color="rgba(128,128,128,0.4)",
-                      annotation_text="START", annotation_position="bottom right",
-                      annotation_font_size=9, annotation_font_color="rgba(128,128,128,0.6)")
+        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="#888888", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="#888888")
         
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
@@ -1394,7 +1381,7 @@ elif app_view == "Trends":
         elif metric == 'Muscle Mass (kg)':
             start_x = current_date
             start_y = spec_recent.iloc[-1][metric]
-        else: 
+        else:
             start_x = current_date
             start_y = spec_recent[metric].mean()
             
@@ -1403,57 +1390,24 @@ elif app_view == "Trends":
         if days_span > 0:
             target_val_at_end = start_y + (daily_rate * days_span)
             
-            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981",
-                          annotation_text=end_label, annotation_position="top left",
-                          annotation_font_size=9, annotation_font_color="#10B981")
-            
-            fig.add_trace(go.Scatter(
-                x=[target_end_date], y=[target_val_at_end],
-                mode='markers+text', name=f'{end_label} Goal',
-                marker=dict(size=8, color='#10B981', symbol='diamond', line=dict(width=1.5, color='white')),
-                text=[f"{target_val_at_end:.1f}{unit}"],
-                textposition="middle right",
-                textfont=dict(color="#10B981", size=10, family="DM Mono"),
-                hoverinfo='skip'
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=[start_x, target_end_date], y=[start_y, target_val_at_end],
-                mode='lines', name='Target Path',
-                line=dict(color='rgba(128,128,128,0.4)', width=1.5, dash='dot'),
-                hoverinfo='skip'
-            ))
+            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="#10B981")
+            fig.add_trace(go.Scatter(x=[target_end_date], y=[target_val_at_end], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{target_val_at_end:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="Inter"), hoverinfo='skip'))
+            fig.add_trace(go.Scatter(x=[start_x, target_end_date], y=[start_y, target_val_at_end], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
         if 'dates' in traj_data.get(metric, {}):
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
             
-            fig.add_trace(go.Scatter(
-                x=x_vals + x_vals[::-1],
-                y=list(y_upper) + list(y_lower)[::-1],
-                fill='toself',
-                fillcolor='rgba(128,128,128,0.06)',
-                line=dict(color='rgba(0,0,0,0)'),
-                hoverinfo="skip", showlegend=False
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=x_vals, y=traj_data[metric]['preds'],
-                mode='lines', name='Trajectory',
-                line=dict(color=hex_col, width=2, dash='dash'),
-                hoverinfo='skip'
-            ))
+            fig.add_trace(go.Scatter(x=x_vals + x_vals[::-1], y=list(y_upper) + list(y_lower)[::-1], fill='toself', fillcolor='rgba(150,150,150,0.1)', line=dict(color='rgba(255,255,255,0)'), hoverinfo="skip", showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=traj_data[metric]['preds'], mode='lines', name='Trajectory', line=dict(color=hex_col, width=2, dash='dash'), hoverinfo='skip'))
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=16, b=40), height=195, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.3, xanchor="center", x=0.5,
-                       font=dict(size=9, color='rgba(128,128,128,0.6)'), bgcolor='rgba(0,0,0,0)'),
-            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d',
-                      range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.08)', zeroline=False,
-                      tickfont=font_cfg, side='right')
+            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
+            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
+            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1608,14 +1562,13 @@ elif app_view == "Data":
     
     seven_days_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
     
-    st.markdown("""
-    <div style='display: grid; grid-template-columns: 2.2fr 1.2fr 1.2fr 1.2fr; gap: 8px; padding: 0 16px; margin-bottom: 10px; font-family:"DM Mono", monospace; font-size:0.6rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing: 1.5px; font-weight: 600;'>
-        <div>Date</div>
-        <div style='text-align:right;'>Weight</div>
-        <div style='text-align:right;'>Muscle</div>
-        <div style='text-align:right;'>Fat</div>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2, col3, col4, col5 = st.columns([2.5, 1.8, 1.8, 1.8, 0.8])
+    col1.markdown("<span style='font-family:DM Mono,monospace; font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase; letter-spacing:1.5px;'>Date</span>", unsafe_allow_html=True)
+    col2.markdown("<span style='font-family:DM Mono,monospace; font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase; letter-spacing:1.5px;'>Weight</span>", unsafe_allow_html=True)
+    col3.markdown("<span style='font-family:DM Mono,monospace; font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase; letter-spacing:1.5px;'>Muscle</span>", unsafe_allow_html=True)
+    col4.markdown("<span style='font-family:DM Mono,monospace; font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase; letter-spacing:1.5px;'>Fat</span>", unsafe_allow_html=True)
+    col5.markdown("<span></span>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1px; background:var(--border-strong); margin-bottom:10px;'></div>", unsafe_allow_html=True)
     
     for i in range(len(df)-1, max(-1, len(df)-21), -1):
         row = df.iloc[i]
@@ -1630,29 +1583,24 @@ elif app_view == "Data":
             dm_color = "var(--c-emerald)" if delta_m >= 0 else "var(--c-rose)"
             dbf_color = "var(--c-emerald)" if delta_bf <= 0 else "var(--c-rose)"
             
-            delta_html_w = f"<div style='color:{dw_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_w)}{delta_w:.1f}</div>"
-            delta_html_m = f"<div style='color:{dm_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_m)}{delta_m:.1f}</div>"
-            delta_html_bf = f"<div style='color:{dbf_color}; font-size:0.58rem; margin-top:2px;'>{sgn(delta_bf)}{delta_bf:.1f}</div>"
+            delta_html_w = f"<span style='color:{dw_color}; font-size:0.6rem; margin-left:2px;'>{sgn(delta_w)}{delta_w:.1f}</span>"
+            delta_html_m = f"<span style='color:{dm_color}; font-size:0.6rem; margin-left:2px;'>{sgn(delta_m)}{delta_m:.1f}</span>"
+            delta_html_bf = f"<span style='color:{dbf_color}; font-size:0.6rem; margin-left:2px;'>{sgn(delta_bf)}{delta_bf:.1f}</span>"
         else:
-            delta_html_w, delta_html_m, delta_html_bf = "", "", ""
+            delta_html_w = delta_html_m = delta_html_bf = ""
 
         can_delete = pd.Timestamp(row['Date']) >= seven_days_ago
-        c1, c2 = st.columns([5.5, 0.8])
-        with c1:
-            st.markdown(f"""
-            <div class="hist-row" style="padding-right:0;">
-                <div style="display: grid; grid-template-columns: 2.2fr 1.2fr 1.2fr 1.2fr; gap: 8px; align-items: center; width: 100%;">
-                    <div class="hist-date">{row['Date'].strftime('%d %b %Y')}</div>
-                    <div class="hist-vals" style="text-align:right;">{row['Weight (kg)']:.1f}{delta_html_w}</div>
-                    <div class="hist-vals" style="text-align:right;">{row['Muscle Mass (kg)']:.1f}{delta_html_m}</div>
-                    <div class="hist-vals" style="text-align:right;">{row['Body Fat (%)']:.1f}%{delta_html_bf}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        with c2:
+        
+        col1, col2, col3, col4, col5 = st.columns([2.5, 1.8, 1.8, 1.8, 0.8], vertical_alignment="center")
+        col1.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.75rem; color:var(--text-main); font-weight:600;'>{row['Date'].strftime('%d %b %Y')}</span>", unsafe_allow_html=True)
+        col2.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.95rem; color:var(--text-main); font-weight:700;'>{row['Weight (kg)']:.1f}</span><br>{delta_html_w}", unsafe_allow_html=True)
+        col3.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.95rem; color:var(--text-main); font-weight:700;'>{row['Muscle Mass (kg)']:.1f}</span><br>{delta_html_m}", unsafe_allow_html=True)
+        col4.markdown(f"<span style='font-family:DM Mono,monospace; font-size:0.95rem; color:var(--text-main); font-weight:700;'>{row['Body Fat (%)']:.1f}%</span><br>{delta_html_bf}", unsafe_allow_html=True)
+        
+        with col5:
             if can_delete:
-                st.markdown("<div class='del-btn' style='height:100%; display:flex; align-items:center; justify-content:center; padding-top:14px;'>", unsafe_allow_html=True)
-                if st.button("Del", key=f"del_{i}"):
+                st.markdown("<div class='del-btn'>", unsafe_allow_html=True)
+                if st.button("✕", key=f"del_{i}"):
                     new_df = df.drop(index=i).reset_index(drop=True)
                     overwrite_body_sheet(st.session_state['sheet_url'], new_df)
                     st.session_state['active_df'] = new_df
@@ -1660,13 +1608,13 @@ elif app_view == "Data":
                     system_alert("Deleted", "err")
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
+                
+        st.markdown("<div style='height:1px; background:var(--border); margin:8px 0;'></div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
 # SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
-    header_placeholder.empty()
-
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.95rem; font-weight:600; color:var(--text-muted); margin-bottom: 1.5rem;'>👤 {get_display_name(st.session_state['current_user'])}</div>", unsafe_allow_html=True)
     
@@ -1711,13 +1659,19 @@ elif app_view == "Settings":
         system_alert("Saved")
         st.rerun()
 
-    st.markdown('<div class="settings-lbl">Analysis Range</div>', unsafe_allow_html=True)
+    st.markdown('<div class="settings-lbl">Dates & Tracking Range</div>', unsafe_allow_html=True)
+    
+    new_gym_start = st.date_input("Gym Start Date (Achievements)", value=st.session_state['gym_start_date'])
+    
     c1, c2 = st.columns(2)
     with c1: new_start = st.date_input("Trend Start", value=st.session_state['analysis_start_date'])
     with c2: new_end = st.date_input("Target End", value=st.session_state['target_end_date'])
-    if st.button("Save Dates", use_container_width=True):
+    
+    if st.button("Save Dates & Recalibrate", use_container_width=True):
+        st.session_state['gym_start_date'] = new_gym_start
         st.session_state['analysis_start_date'] = new_start
         st.session_state['target_end_date'] = new_end
+        st.query_params.gym_start = new_gym_start.strftime('%Y-%m-%d')
         st.query_params.start = new_start.strftime('%Y-%m-%d')
         st.query_params.end = new_end.strftime('%Y-%m-%d')
         system_alert("Dates Saved")
@@ -1746,7 +1700,7 @@ elif app_view == "Settings":
                     st.rerun()
 
     if st.session_state.get('is_admin'):
-        st.markdown('<div class="settings-lbl" style="color:var(--c-rose);">Admin</div>', unsafe_allow_html=True)
+        st.markdown('<div class="settings-lbl" style="color:var(--c-rose);">Admin Console</div>', unsafe_allow_html=True)
         if st.button("Switch Profile", use_container_width=True):
             st.markdown("<script>localStorage.removeItem('metrics_user');</script>", unsafe_allow_html=True)
             st.session_state['auth_status'] = False
