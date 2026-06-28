@@ -348,7 +348,7 @@ if 'gym_start_date' not in st.session_state:
 
 # Updated: Default start date to June 27th for new goal/tracking phase
 if 'analysis_start_date' not in st.session_state:
-    default_start = '2026-06-27'
+    default_start = '2026-04-27'
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
 
 if 'target_end_date' not in st.session_state:
