@@ -348,7 +348,7 @@ if 'gym_start_date' not in st.session_state:
 
 # Fixed analysis window – no longer user‑adjustable in Settings
 if 'analysis_start_date' not in st.session_state:
-    st.session_state['analysis_start_date'] = pd.to_datetime('2026-06-27').date()
+    st.session_state['analysis_start_date'] = pd.to_datetime('2026-04-27').date()
 if 'target_end_date' not in st.session_state:
     st.session_state['target_end_date'] = pd.to_datetime('2026-09-01').date()
 
