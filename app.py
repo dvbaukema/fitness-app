@@ -327,7 +327,7 @@ if 'gym_start_date' not in st.session_state:
     st.session_state['gym_start_date'] = pd.to_datetime(st.query_params.get("gym_start", '2026-03-17')).date()
 
 # Settings Fix: Hardcode fixed tracking dates cleanly
-analysis_start = pd.to_datetime('2026-06-27')
+analysis_start = pd.to_datetime('2026-04-27')
 target_end_date = pd.to_datetime('2026-09-01')
 
 # ══════════════════════════════════════════════════════════════
