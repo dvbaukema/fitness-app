@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ══════════════════════════════════════════════════════════════
-# GLOBAL HELPER FUNCTIONS (LOCKED AT TOP TO PREVENT NAME ERRORS)
+# GLOBAL HELPER FUNCTIONS
 # ══════════════════════════════════════════════════════════════
 def system_alert(message, kind="ok"):
     bg = "#10B981" if kind == "ok" else "#EF4444"
@@ -160,7 +160,7 @@ ACTIVITY_MULTIPLIERS = {
 }
 
 # ══════════════════════════════════════════════════════════════
-# AUTO‑LOGIN & PERMANENT STORAGE ENGINE (localStorage)
+# AUTO‑LOGIN & PERMANENT STORAGE ENGINE
 # ══════════════════════════════════════════════════════════════
 st.markdown("""
 <script>
@@ -224,7 +224,6 @@ def load_body_constants(sheet_url):
         return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
         row = df.iloc[0]
-        # Strict order: Height, Gender, Age
         h = float(row.iloc[0]) if len(row) > 0 else 180.0
         g = str(row.iloc[1]).lower().strip() if len(row) > 1 else 'male'
         a = int(float(row.iloc[2])) if len(row) > 2 else 25
@@ -347,9 +346,11 @@ if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] 
 if 'gym_start_date' not in st.session_state:
     st.session_state['gym_start_date'] = pd.to_datetime(st.query_params.get("gym_start", '2026-03-17')).date()
 
+# Updated: Default start date to June 27th for new goal/tracking phase
 if 'analysis_start_date' not in st.session_state:
-    default_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+    default_start = '2026-06-27'
     st.session_state['analysis_start_date'] = pd.to_datetime(st.query_params.get("start", default_start)).date()
+
 if 'target_end_date' not in st.session_state:
     default_end = '2026-09-01'
     st.session_state['target_end_date'] = pd.to_datetime(st.query_params.get("end", default_end)).date()
@@ -495,7 +496,7 @@ css = theme_block + """
 }
 
 /* ══════════════════════════════
-   NAVIGATION — FLOATING RADIO HACK
+   NAVIGATION
 ══════════════════════════════ */
 div[role="radiogroup"] {
     display: flex;
@@ -538,8 +539,6 @@ div[role="radiogroup"] > label[data-checked="true"] div {
 }
 div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
 div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
-
-/* Hide regular segmented controls if they render */
 div[data-testid="stSegmentedControl"] { display: none !important; }
 
 /* ══════════════════════════════
@@ -844,7 +843,6 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
   transition: box-shadow 0.15s ease;
 }
 .hist-row:hover { box-shadow: var(--shadow-md); }
-
 .del-btn button {
     background: transparent !important;
     border: none !important;
@@ -889,7 +887,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 }
 
 /* ══════════════════════════════
-   SLIDERS
+   SLIDERS & INPUTS
 ══════════════════════════════ */
 div[data-testid="stSlider"] label {
   font-family: 'DM Mono', monospace !important;
@@ -912,9 +910,6 @@ div[data-testid="stSlider"] div[role="slider"] {
   box-shadow: var(--shadow-md) !important;
 }
 
-/* ══════════════════════════════
-   INPUTS & SELECTS
-══════════════════════════════ */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div {
   background: var(--input-bg) !important;
@@ -1018,7 +1013,7 @@ div[data-testid="stToggle"] label p {
   font-size: 0.85rem !important;
 }
 
-/* Expander Force Light Mode Visibility */
+/* Expander */
 div[data-testid="stExpander"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
@@ -1034,18 +1029,12 @@ div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
   color: var(--text-main) !important;
 }
 
-/* Spinner steppers hidden */
 button[aria-label="Step down"], button[aria-label="Step up"],
-button[title="Step down"], button[title="Step up"] {
-  display: none !important;
-}
+button[title="Step down"], button[title="Step up"] { display: none !important; }
 
-/* Streamlit error/info messages */
-div[data-testid="stAlert"] {
-  border-radius: 12px !important;
-}
+div[data-testid="stAlert"] { border-radius: 12px !important; }
 
-/* Protocol selector center label */
+/* Protocol Selector Center */
 div[data-testid="stSelectbox"] > div > div {
   display: flex !important;
   align-items: center !important;
@@ -1145,6 +1134,10 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
+# Calculate Global EMA for smoother entries without edge cutoffs
+if not df.empty:
+    df['EMA'] = df['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
+
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
 has_enough_weight_data = len(df_window_full) >= 3 or len(df) >= 3
@@ -1152,14 +1145,27 @@ has_enough_comp_data = len(df_window_full) >= 5 or len(df) >= 5
 
 monthly_trends, traj_data = {}, {}
 recent_dfs_for_plot = {}
+active_goal = st.session_state.get('current_goal', 'Lean Bulk')
+ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_state['goal_profiles']['Lean Bulk'])
 
 if has_enough_weight_data:
-    df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3)
+    df_w = df_window_full if len(df_window_full) >= 3 else df.tail(3).copy()
+    
+    # Calculate Custom Expected Curve Logic based on Start Date
+    if len(df_w) > 0:
+        start_weight = df_w.iloc[0]['EMA'] # Use EMA for anchor to prevent noise bias
+        target_rate = ideal_rates['Weight (kg)'][0]
+        daily_rate = target_rate / 30.0
+        
+        days_diff = (df_w['Date'] - df_w['Date'].min()).dt.days
+        df_w['Expected_Weight'] = start_weight + (daily_rate * days_diff)
+        
     recent_dfs_for_plot['Weight (kg)'] = df_w 
     
+    # Regression logic for fallback and predictions
     X_w_raw = df_w['Date'].map(lambda d: (d - df_w['Date'].min()).days).values
     X_w = X_w_raw.reshape(-1, 1)
-    y_w = df_w['Weight (kg)'].values
+    y_w = df_w['EMA'].values if 'EMA' in df_w else df_w['Weight (kg)'].values
     
     res_w = stats.linregress(X_w_raw, y_w)
     slope_w = res_w.slope
@@ -1219,12 +1225,7 @@ if has_enough_comp_data:
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
-active_goal = st.session_state.get('current_goal', 'Lean Bulk')
-ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_state['goal_profiles']['Lean Bulk'])
-
 header_placeholder = st.empty()
-
-# ── STREAMLIT RADIO HACK FOR FLOATING TABS ──
 app_view = st.radio("Nav", ["Entry", "Nutrition", "Trends", "Analysis", "Data", "Settings"], horizontal=True, label_visibility="collapsed")
 
 header_placeholder.markdown(f"""
@@ -1236,6 +1237,9 @@ header_placeholder.markdown(f"""
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
 """, unsafe_allow_html=True)
+
+# Check Phase lock
+days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start.date()).days)
 
 # ══════════════════════════════════════════════════════════════
 # ENTRY TAB
@@ -1293,7 +1297,6 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Placed OUTSIDE the form to allow real-time reactivity for the % toggle calculation
     w_val = float(last['Weight (kg)'])
     w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
     
@@ -1382,15 +1385,17 @@ elif app_view == "Nutrition":
     bf_lower = ideal_rates['Body Fat (%)'][1] if len(ideal_rates['Body Fat (%)']) > 1 else -99
     is_fat_loss_driven = (wt_trend < w_min) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
 
-    if len(df_window_full) < 5:
-        st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data since the Start Date to provide adaptive calorie adjustments."), unsafe_allow_html=True)
+    if days_elapsed_since_start < 21:
+        st.markdown(hud_card("c-neu", "⏳", "Phase Lock Active", f"Goal locked for the first 3-4 weeks to stabilize water noise. No calorie adjustments recommended yet. (Day {days_elapsed_since_start}/21)"), unsafe_allow_html=True)
+    elif len(df_window_full) < 5:
+        st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data points since the Start Date to provide adaptive calorie adjustments."), unsafe_allow_html=True)
     else:
         if is_muscle_driven:
             st.markdown(hud_card("c-ok", "🧬", "Hyper-Anabolic Response", f"Weight is increasing rapidly (+{wt_trend:.2f} kg/mo), but it is heavily driven by muscle gain (+{mmt:.2f} kg/mo). Do not cut calories. Ride this muscle memory wave."), unsafe_allow_html=True)
         elif is_fat_loss_driven:
             st.markdown(hud_card("c-ok", "🔥", "Hyper-Lipolytic Response", f"Weight is dropping fast ({wt_trend:.2f} kg/mo), but muscle is preserved and fat is melting (-{abs(bft):.2f} %/mo). Excellent recomposition. Maintain current intake."), unsafe_allow_html=True)
         elif wt_trend > w_max:
-            st.markdown(hud_card("c-err", "↓", "Pace Too Fast", f"Gaining {wt_trend:.2f} kg/mo (Limit: {w_max} kg). Recommend lowering intake by 200 kcal."), unsafe_allow_html=True)
+            st.markdown(hud_card("c-err", "↓", "Pace Diverging Over Expected", f"Gaining {wt_trend:.2f} kg/mo (Limit: {w_max} kg). Recommend lowering intake by 200 kcal."), unsafe_allow_html=True)
             if st.button("Accept & Lower Calories by 200", use_container_width=True):
                 st.session_state['calorie_offset'] -= 200
                 st.session_state['analysis_start_date'] = datetime.now().date()
@@ -1399,7 +1404,7 @@ elif app_view == "Nutrition":
                 system_alert("Phase Reset")
                 st.rerun()
         elif wt_trend < w_min:
-            st.markdown(hud_card("c-wrn", "↑", "Pace Too Slow", f"Tracking at {wt_trend:.2f} kg/mo (Minimum: {w_min} kg). Recommend increasing intake by 200 kcal."), unsafe_allow_html=True)
+            st.markdown(hud_card("c-wrn", "↑", "Pace Diverging Under Expected", f"Tracking at {wt_trend:.2f} kg/mo (Minimum: {w_min} kg). Recommend increasing intake by 200 kcal."), unsafe_allow_html=True)
             if st.button("Accept & Increase Calories by 200", use_container_width=True):
                 st.session_state['calorie_offset'] += 200
                 st.session_state['analysis_start_date'] = datetime.now().date()
@@ -1408,7 +1413,7 @@ elif app_view == "Nutrition":
                 system_alert("Phase Reset")
                 st.rerun()
         else:
-            st.markdown(hud_card("c-ok", "✓", "Pace Locked In", f"Weight trend ({wt_trend:.2f} kg/mo) is exactly within protocol bounds. Maintain current intake."), unsafe_allow_html=True)
+            st.markdown(hud_card("c-ok", "✓", "Pace Locked In", f"Moving Average ({wt_trend:.2f} kg/mo) is exactly within protocol bounds. Maintain current intake."), unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
 # TRENDS TAB
@@ -1469,13 +1474,41 @@ elif app_view == "Trends":
         ))
         
         spec_recent = recent_dfs_for_plot[metric]
-        fig.add_trace(go.Scatter(
-            x=spec_recent['Date'], y=spec_recent[metric],
-            mode='lines+markers', name='Active Data',
-            line=dict(color='#3B82F6', width=2.5),
-            marker=dict(size=5, color='#3B82F6', line=dict(width=1.5, color='white')),
-            hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'
-        ))
+        
+        # New Plotly Logic for Weight
+        if metric == 'Weight (kg)':
+            # Raw grey dots
+            fig.add_trace(go.Scatter(
+                x=spec_recent['Date'], y=spec_recent['Weight (kg)'],
+                mode='markers', name='Raw Weight',
+                marker=dict(size=5, color='rgba(128,128,128,0.4)', line=dict(width=0)),
+                hovertemplate='%{x|%b %d}: %{y:.1f} kg<extra></extra>'
+            ))
+            # Expected Curve
+            if 'Expected_Weight' in spec_recent.columns:
+                fig.add_trace(go.Scatter(
+                    x=spec_recent['Date'], y=spec_recent['Expected_Weight'],
+                    mode='lines', name='Expected Curve',
+                    line=dict(color='#10B981', dash='dot', width=2),
+                    hovertemplate='Expected: %{y:.1f} kg<extra></extra>'
+                ))
+            # EMA Trace
+            if 'EMA' in spec_recent.columns:
+                fig.add_trace(go.Scatter(
+                    x=spec_recent['Date'], y=spec_recent['EMA'],
+                    mode='lines', name='EMA Trend',
+                    line=dict(color='#3B82F6', width=3),
+                    hovertemplate='EMA: %{y:.1f} kg<extra></extra>'
+                ))
+        else:
+            # Traditional rendering for comp stats
+            fig.add_trace(go.Scatter(
+                x=spec_recent['Date'], y=spec_recent[metric],
+                mode='lines+markers', name='Active Data',
+                line=dict(color='#3B82F6', width=2.5),
+                marker=dict(size=5, color='#3B82F6', line=dict(width=1.5, color='white')),
+                hovertemplate='%{x|%b %d}: %{y:.1f}<extra></extra>'
+            ))
         
         epoch_date = spec_recent['Date'].min()
         fig.add_vline(x=epoch_date, line_width=1.5, line_dash="solid", line_color="rgba(128,128,128,0.4)",
@@ -1487,7 +1520,8 @@ elif app_view == "Trends":
         
         if metric == 'Weight (kg)':
             start_x = epoch_date
-            start_y = spec_recent.iloc[0][metric]
+            # Base the target goal path off the initial expected weight
+            start_y = spec_recent.iloc[0]['Expected_Weight'] if 'Expected_Weight' in spec_recent.columns else spec_recent.iloc[0]['EMA']
         elif metric == 'Muscle Mass (kg)':
             start_x = current_date
             start_y = spec_recent.iloc[-1][metric]
@@ -1514,12 +1548,14 @@ elif app_view == "Trends":
                 hoverinfo='skip'
             ))
             
-            fig.add_trace(go.Scatter(
-                x=[start_x, target_end_date], y=[start_y, target_val_at_end],
-                mode='lines', name='Target Path',
-                line=dict(color='rgba(128,128,128,0.4)', width=1.5, dash='dot'),
-                hoverinfo='skip'
-            ))
+            # Remove target path trace for Weight since we map it natively with 'Expected Curve'
+            if metric != 'Weight (kg)':
+                fig.add_trace(go.Scatter(
+                    x=[start_x, target_end_date], y=[start_y, target_val_at_end],
+                    mode='lines', name='Target Path',
+                    line=dict(color='rgba(128,128,128,0.4)', width=1.5, dash='dot'),
+                    hoverinfo='skip'
+                ))
 
         if 'dates' in traj_data.get(metric, {}):
             x_vals = traj_data[metric]['dates']
@@ -1537,7 +1573,7 @@ elif app_view == "Trends":
             
             fig.add_trace(go.Scatter(
                 x=x_vals, y=traj_data[metric]['preds'],
-                mode='lines', name='Trajectory',
+                mode='lines', name='Trajectory Forecast',
                 line=dict(color=hex_col, width=2, dash='dash'),
                 hoverinfo='skip'
             ))
@@ -1546,11 +1582,11 @@ elif app_view == "Trends":
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, t=16, b=40), height=195, showlegend=True,
             legend=dict(orientation="h", yanchor="top", y=-0.3, xanchor="center", x=0.5,
-                       font=dict(size=9, color='rgba(128,128,128,0.6)'), bgcolor='rgba(0,0,0,0)'),
+                        font=dict(size=9, color='rgba(128,128,128,0.6)'), bgcolor='rgba(0,0,0,0)'),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d',
-                      range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
+                       range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
             yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.08)', zeroline=False,
-                      tickfont=font_cfg, side='right')
+                       tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1617,21 +1653,32 @@ elif app_view == "Analysis":
     w_tgt, w_lower, w_upper = ideal_rates['Weight (kg)']
     diags = []
     
+    # Calculate Trend Confidence
+    recent_std = df_window_full['Weight (kg)'].tail(7).std()
+    if pd.isna(recent_std) or len(df_window_full) < 7:
+        diags.append(hud_card("c-neu", "📊", "Trend Confidence: Calibrating", "Need at least 7 days of data for stable noise filtering."))
+    elif recent_std > 0.6:
+        diags.append(hud_card("c-err", "⚠️", "Trend Confidence: LOW", f"High weight variance ({recent_std:.2f} kg std dev). Water noise heavily present. Do not adjust calories yet."))
+    else:
+        diags.append(hud_card("c-ok", "📊", "Trend Confidence: HIGH", f"Low variance ({recent_std:.2f} kg std dev). Trend line is stable and reliable."))
+    
     is_muscle_driven = (wt > w_upper) and has_enough_comp_data and (mmt >= (wt * 0.4)) and (bft <= 0.2)
     bf_lower = ideal_rates['Body Fat (%)'][1] if len(ideal_rates['Body Fat (%)']) > 1 else -99
     is_fat_loss_driven = (wt < w_lower) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
 
-    if is_muscle_driven:
+    if days_elapsed_since_start < 21:
+        diags.append(hud_card("c-neu", "⏳", "Phase Lock", f"Goal locked for first 3 weeks to stabilize water noise. No adjustments advised. (Day {days_elapsed_since_start}/21)"))
+    elif is_muscle_driven:
         diags.append(hud_card("c-ok", "🧬", "Hyper-Anabolic Response", f"Weight is increasing rapidly (+{wt:.2f} kg/mo), but it is heavily driven by muscle gain (+{mmt:.2f} kg/mo). Do not cut calories. Ride this muscle memory wave."))
     elif is_fat_loss_driven:
         diags.append(hud_card("c-ok", "🔥", "Hyper-Lipolytic Response", f"Weight is dropping fast ({wt:.2f} kg/mo), but muscle is preserved and fat is melting (-{abs(bft):.2f} %/mo). Excellent recomposition."))
     elif wt > w_upper:
-        diags.append(hud_card("c-err", "↓", "Over Upper Limit", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Reduce caloric intake by 200-300 kcal."))
+        diags.append(hud_card("c-err", "↓", "Over Upper Limit", f"Weight accumulation ({wt:.2f} kg/mo) exceeds limits. Review moving average vs Expected Curve and consider reducing caloric intake by 200 kcal."))
     elif wt < w_lower:
         if w_lower < 0:
             diags.append(hud_card("c-err", "⚠", "Catabolic Danger", f"Losing weight too rapidly ({wt:.2f} kg/mo). Increase caloric intake immediately."))
         else:
-            diags.append(hud_card("c-wrn", "↑", "Anabolic Stall", f"Weight accumulation lagging below {w_lower} kg/mo. Increase daily caloric intake by 200-300 kcal."))
+            diags.append(hud_card("c-wrn", "↑", "Anabolic Stall", f"Weight accumulation lagging below {w_lower} kg/mo. Review moving average vs Expected Curve and increase daily caloric intake by 200 kcal."))
     
     if has_enough_comp_data and not is_muscle_driven and not is_fat_loss_driven:
         m_tgt, m_lower = ideal_rates['Muscle Mass (kg)'][:2]
@@ -1641,7 +1688,7 @@ elif app_view == "Analysis":
         if bft > bf_upper:
             diags.append(hud_card("c-err", "⚠", "Excessive Fat Gain", f"Body fat accumulation ({bft:.2f} %/mo) exceeds limits. Dial back carbs/fats slightly."))
             
-    if not diags:
+    if len(diags) <= 1: # Assuming confidence card is index 0
         diags.append(hud_card("c-ok", "✓", "Locked In", "All tracked parameters are within optimal bounds. Stay the course."))
     
     for d in diags:
