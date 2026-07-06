@@ -16,13 +16,13 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Beta 3",
-    layout="wide",
+    page_title="METRICS | Beta",
+    layout="centered",
     initial_sidebar_state="collapsed"
 )
 
 # ══════════════════════════════════════════════════════════════
-# GLOBAL HELPER FUNCTIONS
+# GLOBAL HELPER FUNCTIONS (LOCKED AT TOP TO PREVENT NAME ERRORS)
 # ══════════════════════════════════════════════════════════════
 def system_alert(message, kind="ok"):
     bg = "#10B981" if kind == "ok" else "#EF4444"
@@ -533,7 +533,7 @@ if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]:
     st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL (container wider, scoped navigation, entry fixes)
+# CSS — OVERHAUL
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F7F8FA;
@@ -1386,14 +1386,11 @@ if has_enough_weight_data:
     X_w_raw = elapsed_days(df_w['Date'])
     y_w = df_w['Weight (kg)_EMA'].values
     
-    # ── ADVANCED EMA SLOPE LOGIC ──
-    # If the window is less than 14 days, standard linear regression will fail to read the EMA properly.
-    # We instead draw a direct slope between the start and end of the EMA to find the true velocity.
     days_elapsed = max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0)
     
     if days_elapsed < 14 and len(y_w) >= 2:
         slope_w = (y_w[-1] - y_w[0]) / days_elapsed if days_elapsed > 0 else 0
-        stderr_w = 0 # Cannot calculate error on a point-to-point slope
+        stderr_w = 0 
         r2_w = 1.0
         fit_y_w = y_w[0] + (slope_w * X_w_raw)
     else:
@@ -1515,7 +1512,7 @@ header_placeholder.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Check Phase lock
-days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start).days)
+days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start.date()).days)
 
 # ══════════════════════════════════════════════════════════════
 # ENTRY TAB
@@ -1797,7 +1794,7 @@ elif app_view == "Trends":
 
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
-        days_span = (target_end_date - current_date.date()).days
+        days_span = (target_end_date.date() - current_date.date()).days
         if days_span > 0 and ema_col in spec_recent.columns:
             latest_ema = spec_recent[ema_col].iloc[-1]
             goal_val = latest_ema + daily_rate * days_span
