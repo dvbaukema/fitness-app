@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Beta",
+    page_title="METRICS | Beta 3",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -344,6 +344,7 @@ def overwrite_body_sheet(sheet_url, df):
     
     out_df = pd.DataFrame(values[1:], columns=values[0])
     return overwrite_sheet_range(sheet_url, 'Data!A:E', out_df)
+
 def ensure_sheet_tab(sheet_url, tab_name):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
@@ -530,6 +531,8 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS:
     st.session_state['activity_level'] = DEFAULT_SETTINGS['activity']
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]:
     st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
+    
+# ══════════════════════════════════════════════════════════════
 # CSS — OVERHAUL (container wider, scoped navigation, entry fixes)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
@@ -1332,6 +1335,7 @@ if st.session_state['auth_status']:
             sync_query_params_from_settings()
         if settings_changed:
             st.rerun()
+
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING & STATISTICAL ENGINE (EMA for all metrics)
 # ══════════════════════════════════════════════════════════════
@@ -1381,19 +1385,32 @@ if has_enough_weight_data:
 
     X_w_raw = elapsed_days(df_w['Date'])
     y_w = df_w['Weight (kg)_EMA'].values
-
-    res_w = stats.linregress(X_w_raw, y_w)
-    slope_w = res_w.slope
-    stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
+    
+    # ── ADVANCED EMA SLOPE LOGIC ──
+    # If the window is less than 14 days, standard linear regression will fail to read the EMA properly.
+    # We instead draw a direct slope between the start and end of the EMA to find the true velocity.
+    days_elapsed = max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0)
+    
+    if days_elapsed < 14 and len(y_w) >= 2:
+        slope_w = (y_w[-1] - y_w[0]) / days_elapsed if days_elapsed > 0 else 0
+        stderr_w = 0 # Cannot calculate error on a point-to-point slope
+        r2_w = 1.0
+        fit_y_w = y_w[0] + (slope_w * X_w_raw)
+    else:
+        res_w = stats.linregress(X_w_raw, y_w)
+        slope_w = res_w.slope
+        stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
+        r2_w = 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2
+        fit_y_w = res_w.intercept + slope_w * X_w_raw
 
     daily_slopes['Weight (kg)'] = slope_w
     weekly_trends['Weight (kg)'] = slope_w * 7
     monthly_trends['Weight (kg)'] = slope_w * 30
-    fit_y_w = res_w.intercept + slope_w * X_w_raw
+    
     trend_stats['Weight (kg)'] = {
         'n': len(df_w),
-        'days': max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0),
-        'r2': 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2,
+        'days': days_elapsed,
+        'r2': r2_w,
         'slope': slope_w,
     }
 
@@ -1402,7 +1419,7 @@ if has_enough_weight_data:
         future_days_w  = np.array([[i] for i in range(0, days_to_end_w + 10)])
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
 
-        pred_y_w = res_w.intercept + slope_w * future_days_w.flatten()
+        pred_y_w = fit_y_w[0] + slope_w * future_days_w.flatten() if days_elapsed < 14 else res_w.intercept + slope_w * future_days_w.flatten()
         margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96
 
         traj_data['Weight (kg)'] = {
@@ -1423,6 +1440,7 @@ if has_enough_weight_data:
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5).copy()
     X_c_raw = elapsed_days(df_c['Date'])
+    days_elapsed_c = max(float(np.nanmax(X_c_raw) - np.nanmin(X_c_raw)), 0.0)
 
     days_to_end_c = (target_end_date.date() - df_c['Date'].min().date()).days
     future_days_c, future_dates_c = None, None
@@ -1434,23 +1452,31 @@ if has_enough_comp_data:
         recent_dfs_for_plot[m] = df_c
         y_c = df_c[f'{m}_EMA'].values
 
-        res_c = stats.linregress(X_c_raw, y_c)
-        slope_c = res_c.slope
-        stderr_c = 0 if pd.isna(res_c.stderr) else res_c.stderr
+        if days_elapsed_c < 14 and len(y_c) >= 2:
+            slope_c = (y_c[-1] - y_c[0]) / days_elapsed_c if days_elapsed_c > 0 else 0
+            stderr_c = 0 
+            r2_c = 1.0
+            fit_y_c = y_c[0] + (slope_c * X_c_raw)
+        else:
+            res_c = stats.linregress(X_c_raw, y_c)
+            slope_c = res_c.slope
+            stderr_c = 0 if pd.isna(res_c.stderr) else res_c.stderr
+            r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
+            fit_y_c = res_c.intercept + slope_c * X_c_raw
 
         daily_slopes[m] = slope_c
         weekly_trends[m] = slope_c * 7
         monthly_trends[m] = slope_c * 30
-        fit_y_c = res_c.intercept + slope_c * X_c_raw
+        
         trend_stats[m] = {
             'n': len(df_c),
-            'days': max(float(np.nanmax(X_c_raw) - np.nanmin(X_c_raw)), 0.0),
-            'r2': 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2,
+            'days': days_elapsed_c,
+            'r2': r2_c,
             'slope': slope_c,
         }
 
         if future_days_c is not None:
-            pred_y_c = res_c.intercept + slope_c * future_days_c.flatten()
+            pred_y_c = fit_y_c[0] + slope_c * future_days_c.flatten() if days_elapsed_c < 14 else res_c.intercept + slope_c * future_days_c.flatten()
             margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96
 
             traj_data[m] = {
@@ -1467,6 +1493,7 @@ if has_enough_comp_data:
                 'fit_dates': df_c['Date'].tolist(),
                 'fit': fit_y_c,
             }
+
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
@@ -1488,10 +1515,10 @@ header_placeholder.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Check Phase lock
-days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start.date()).days)
+days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start).days)
 
 # ══════════════════════════════════════════════════════════════
-# ENTRY TAB (fixed muscle mass radio overlap)
+# ENTRY TAB
 # ══════════════════════════════════════════════════════════════
 if app_view == "Entry":
     if st.session_state['enable_quotes']:
@@ -1574,7 +1601,7 @@ if app_view == "Entry":
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# NUTRITION TAB (unchanged)
+# NUTRITION TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Nutrition":
     st.markdown('<div class="s-head" style="margin-top:0;">Targets & Coaching</div>', unsafe_allow_html=True)
@@ -1668,7 +1695,7 @@ elif app_view == "Nutrition":
             st.markdown(hud_card("c-ok", "✓", "Pace Locked In", f"Moving Average ({wt_trend:.2f} kg/mo) is exactly within protocol bounds. Maintain current intake."), unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# TRENDS TAB (overhauled: EMA on all metrics, no expected curve)
+# TRENDS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Trends":
     if not has_enough_weight_data:
@@ -1770,7 +1797,7 @@ elif app_view == "Trends":
 
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
-        days_span = (target_end_date.date() - current_date.date()).days
+        days_span = (target_end_date - current_date.date()).days
         if days_span > 0 and ema_col in spec_recent.columns:
             latest_ema = spec_recent[ema_col].iloc[-1]
             goal_val = latest_ema + daily_rate * days_span
@@ -1800,7 +1827,7 @@ elif app_view == "Trends":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# ANALYSIS TAB (unchanged, still uses trends)
+# ANALYSIS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Analysis":
     if not has_enough_weight_data:
@@ -1905,7 +1932,7 @@ elif app_view == "Analysis":
         st.markdown(d, unsafe_allow_html=True)
 
     if st.session_state.get('enable_achievements', True):
-        start_gym_time = st.session_state['gym_start_date']
+        start_gym_time = st.session_state.get('gym_start_date', datetime(2026, 3, 17).date())
         days_elapsed = max(0, (datetime.now().date() - start_gym_time).days)
         TIERS = [
             {"name": "Day 1", "emoji": "👋", "days": 0},
@@ -1955,7 +1982,7 @@ elif app_view == "Analysis":
         st.markdown(engine_html, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# DATA TAB (now wider, no layout issues)
+# DATA TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Data":
     st.markdown('<div class="s-head" style="margin-top:0;">Record History</div>', unsafe_allow_html=True)
@@ -2018,7 +2045,7 @@ elif app_view == "Data":
             st.markdown(hud_card("c-neu", "🔒", "History Protected", "No records from the last 7 days are available to delete."), unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
-# SETTINGS TAB (removed problematic Trend Start/End date inputs)
+# SETTINGS TAB
 # ══════════════════════════════════════════════════════════════
 elif app_view == "Settings":
     st.markdown('<div class="settings-lbl" style="margin-top:0;">Profile</div>', unsafe_allow_html=True)
@@ -2074,6 +2101,7 @@ elif app_view == "Settings":
     with d2:
         new_target_end = st.date_input("Target End Date", value=st.session_state['target_end_date'])
     new_gym_start = st.date_input("Gym Start Date (Achievements)", value=st.session_state['gym_start_date'])
+    
     valid_dates = new_target_end > new_analysis_start
     if not valid_dates:
         st.markdown("<div class='alert-banner danger'>Target end date must be after the tracking start date.</div>", unsafe_allow_html=True)
@@ -2099,6 +2127,7 @@ elif app_view == "Settings":
         st.session_state['theme_pref'] = new_theme
         st.session_state['enable_quotes'] = new_enable_quotes
         st.session_state['enable_achievements'] = new_enable_achievements
+        
         ok = persist_app_settings(st.session_state['sheet_url'])
         system_alert("Saved to Sheets" if ok else "Local Save Only", "ok" if ok else "err")
         st.rerun()
@@ -2113,6 +2142,7 @@ elif app_view == "Settings":
                     st.session_state['all_quotes'].append(new_quote)
                     system_alert("Added")
                     st.rerun()
+
     if st.session_state.get('is_admin'):
         st.markdown('<div class="settings-lbl" style="color:var(--c-rose);">Admin Console</div>', unsafe_allow_html=True)
         if st.button("Switch Profile", use_container_width=True):
