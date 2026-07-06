@@ -124,12 +124,12 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     pct = max(min(pct, 97), 3)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    # Error bar math
+    # Increased visibility for error bars
     err_pct_width = (err_rate / (2 * max_bound)) * 100 if max_bound > 0 else 0
     err_left = max(0, pct - err_pct_width)
     err_right = min(100, pct + err_pct_width)
     actual_err_width = err_right - err_left
-    err_html = f"<div style='position:absolute; top:0; bottom:0; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.18; z-index:4; border-radius:4px;'></div>"
+    err_html = f"<div style='position:absolute; top:2px; bottom:2px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.4; z-index:4; border-radius:4px;'></div>"
 
     html_block = f"""
     <div class='tj-blk'>
@@ -187,22 +187,16 @@ MUSCLE_INPUT_MODES = ["Percentage (%)", "Kilograms (kg)"]
 
 def parse_int_setting(value, default=0):
     try:
-        if value in (None, ""):
-            return int(default)
+        if value in (None, ""): return int(default)
         return int(float(value))
-    except (TypeError, ValueError):
-        return int(default)
+    except (TypeError, ValueError): return int(default)
 
 def parse_bool_setting(value, default=True):
-    if isinstance(value, bool):
-        return value
-    if value in (None, ""):
-        return bool(default)
+    if isinstance(value, bool): return value
+    if value in (None, ""): return bool(default)
     text = str(value).strip().lower()
-    if text in ("1", "true", "yes", "y", "on"):
-        return True
-    if text in ("0", "false", "no", "n", "off"):
-        return False
+    if text in ("1", "true", "yes", "y", "on"): return True
+    if text in ("0", "false", "no", "n", "off"): return False
     return bool(default)
 
 def parse_date_setting(value, default_value):
@@ -256,8 +250,7 @@ def get_google_sheets_service():
         credentials_dict = dict(st.secrets["gcp_service_account"])
         creds = service_account.Credentials.from_service_account_info(credentials_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
         return build('sheets', 'v4', credentials=creds)
-    except Exception:
-        return None
+    except Exception: return None
 
 def extract_sheet_id(url):
     if not url: return None
@@ -277,26 +270,22 @@ def read_sheet_range(sheet_url, range_name):
         headers = vals[0]
         data = vals[1:]
         return pd.DataFrame(data, columns=headers)
-    except HttpError:
-        return pd.DataFrame()
+    except HttpError: return pd.DataFrame()
 
 def load_body_constants(sheet_url):
     df = read_sheet_range(sheet_url, 'Body!A:C')
-    if df.empty:
-        return {'height': 180.0, 'gender': 'male', 'age': 25}
+    if df.empty: return {'height': 180.0, 'gender': 'male', 'age': 25}
     try:
         row = df.iloc[0]
         h = float(row.iloc[0]) if len(row) > 0 else 180.0
         g = str(row.iloc[1]).lower().strip() if len(row) > 1 else 'male'
         a = int(float(row.iloc[2])) if len(row) > 2 else 25
         return {'height': h, 'gender': g, 'age': a}
-    except:
-        return {'height': 180.0, 'gender': 'male', 'age': 25}
+    except: return {'height': 180.0, 'gender': 'male', 'age': 25}
 
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
-    if df.empty:
-        return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
+    if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
     
     if 'Time' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
@@ -304,10 +293,8 @@ def load_body_data(sheet_url):
         df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
         
     for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
-        if m in df.columns:
-            df[m] = pd.to_numeric(df[m], errors='coerce')
-        else:
-            df[m] = np.nan
+        if m in df.columns: df[m] = pd.to_numeric(df[m], errors='coerce')
+        else: df[m] = np.nan
             
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
@@ -322,8 +309,7 @@ def append_to_sheet(sheet_url, range_name, values):
             valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 def append_body_entry(sheet_url, date_str, weight, muscle_mass, body_fat):
     time_str = (datetime.utcnow() + timedelta(hours=2)).strftime('%H:%M:%S')
@@ -342,8 +328,7 @@ def overwrite_sheet_range(sheet_url, range_name, df):
             valueInputOption='USER_ENTERED', body=body
         ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 def overwrite_body_sheet(sheet_url, df):
     values = [['Date', 'Time', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']]
@@ -357,8 +342,7 @@ def overwrite_body_sheet(sheet_url, df):
 def ensure_sheet_tab(sheet_url, tab_name):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id:
-        return False
+    if not service or not sheet_id: return False
     try:
         meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         titles = [s.get('properties', {}).get('title') for s in meta.get('sheets', [])]
@@ -368,35 +352,26 @@ def ensure_sheet_tab(sheet_url, tab_name):
                 body={'requests': [{'addSheet': {'properties': {'title': tab_name}}}]}
             ).execute()
         return True
-    except HttpError:
-        return False
+    except HttpError: return False
 
 def load_app_settings(sheet_url):
     df_settings = read_sheet_range(sheet_url, 'Settings!A:B')
-    if df_settings.empty:
-        return {}
+    if df_settings.empty: return {}
     loaded = {}
     for _, row in df_settings.iterrows():
-        if len(row) < 2:
-            continue
+        if len(row) < 2: continue
         key = str(row.iloc[0]).strip()
         value = row.iloc[1]
-        if key:
-            loaded[key] = value
+        if key: loaded[key] = value
     return loaded
 
 def write_app_settings(sheet_url, settings):
-    if not ensure_sheet_tab(sheet_url, 'Settings'):
-        return False
-    settings_df = pd.DataFrame(
-        [{'Setting': key, 'Value': str(value)} for key, value in settings.items()]
-    )
+    if not ensure_sheet_tab(sheet_url, 'Settings'): return False
+    settings_df = pd.DataFrame([{'Setting': key, 'Value': str(value)} for key, value in settings.items()])
     return overwrite_sheet_range(sheet_url, 'Settings!A:B', settings_df)
 
 def collect_app_settings():
-    def fmt_date(value, fallback):
-        return parse_date_setting(value, fallback).strftime('%Y-%m-%d')
-
+    def fmt_date(value, fallback): return parse_date_setting(value, fallback).strftime('%Y-%m-%d')
     return {
         'goal': st.session_state.get('current_goal', DEFAULT_SETTINGS['goal']),
         'theme': st.session_state.get('theme_pref', DEFAULT_SETTINGS['theme']),
@@ -432,9 +407,7 @@ def persist_app_settings(sheet_url):
     return write_app_settings(sheet_url, collect_app_settings())
 
 def apply_loaded_settings(settings):
-    if not settings:
-        return False
-
+    if not settings: return False
     changed = False
 
     def assign(key, value):
@@ -444,16 +417,13 @@ def apply_loaded_settings(settings):
             changed = True
 
     loaded_goal = settings.get('goal', settings.get('current_goal', st.session_state.get('current_goal', DEFAULT_SETTINGS['goal'])))
-    if loaded_goal in st.session_state.get('goal_profiles', DEFAULT_PROFILES):
-        assign('current_goal', loaded_goal)
+    if loaded_goal in st.session_state.get('goal_profiles', DEFAULT_PROFILES): assign('current_goal', loaded_goal)
 
     loaded_theme = settings.get('theme', st.session_state.get('theme_pref', DEFAULT_SETTINGS['theme']))
-    if loaded_theme in ["System", "Dark", "Light"]:
-        assign('theme_pref', loaded_theme)
+    if loaded_theme in ["System", "Dark", "Light"]: assign('theme_pref', loaded_theme)
 
     loaded_activity = settings.get('activity', st.session_state.get('activity_level', DEFAULT_SETTINGS['activity']))
-    if loaded_activity in ACTIVITY_MULTIPLIERS:
-        assign('activity_level', loaded_activity)
+    if loaded_activity in ACTIVITY_MULTIPLIERS: assign('activity_level', loaded_activity)
 
     assign('calorie_offset', parse_int_setting(settings.get('calorie_offset'), st.session_state.get('calorie_offset', 0)))
     assign('calorie_custom', parse_int_setting(settings.get('calorie_custom'), st.session_state.get('calorie_custom', 0)))
@@ -463,8 +433,7 @@ def apply_loaded_settings(settings):
     assign('gym_start_date', parse_date_setting(settings.get('gym_start'), st.session_state.get('gym_start_date', DEFAULT_SETTINGS['gym_start'])))
 
     loaded_muscle_mode = settings.get('muscle_mass_input_mode', settings.get('mm_mode', st.session_state.get('muscle_mass_input_mode', DEFAULT_SETTINGS['muscle_mass_input_mode'])))
-    if loaded_muscle_mode in MUSCLE_INPUT_MODES:
-        assign('muscle_mass_input_mode', loaded_muscle_mode)
+    if loaded_muscle_mode in MUSCLE_INPUT_MODES: assign('muscle_mass_input_mode', loaded_muscle_mode)
 
     assign('enable_quotes', parse_bool_setting(settings.get('enable_quotes'), st.session_state.get('enable_quotes', True)))
     assign('enable_achievements', parse_bool_setting(settings.get('enable_achievements'), st.session_state.get('enable_achievements', True)))
@@ -525,21 +494,13 @@ if 'muscle_mass_input_mode' not in st.session_state: st.session_state['muscle_ma
 if st.session_state['muscle_mass_input_mode'] not in MUSCLE_INPUT_MODES:
     st.session_state['muscle_mass_input_mode'] = DEFAULT_SETTINGS['muscle_mass_input_mode']
 
-if 'gym_start_date' not in st.session_state:
-    st.session_state['gym_start_date'] = parse_date_setting(st.query_params.get("gym_start"), DEFAULT_SETTINGS['gym_start'])
+if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = parse_date_setting(st.query_params.get("gym_start"), DEFAULT_SETTINGS['gym_start'])
+if 'analysis_start_date' not in st.session_state: st.session_state['analysis_start_date'] = parse_date_setting(st.query_params.get("start"), DEFAULT_SETTINGS['analysis_start'])
+if 'target_end_date' not in st.session_state: st.session_state['target_end_date'] = parse_date_setting(st.query_params.get("end"), DEFAULT_SETTINGS['target_end'])
 
-if 'analysis_start_date' not in st.session_state:
-    st.session_state['analysis_start_date'] = parse_date_setting(st.query_params.get("start"), DEFAULT_SETTINGS['analysis_start'])
-if 'target_end_date' not in st.session_state:
-    st.session_state['target_end_date'] = parse_date_setting(st.query_params.get("end"), DEFAULT_SETTINGS['target_end'])
-
-# ══════════════════════════════════════════════════════════════
-if st.session_state['current_goal'] not in st.session_state['goal_profiles']:
-    st.session_state['current_goal'] = DEFAULT_SETTINGS['goal']
-if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS:
-    st.session_state['activity_level'] = DEFAULT_SETTINGS['activity']
-if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]:
-    st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
+if st.session_state['current_goal'] not in st.session_state['goal_profiles']: st.session_state['current_goal'] = DEFAULT_SETTINGS['goal']
+if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_state['activity_level'] = DEFAULT_SETTINGS['activity']
+if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
 # CSS — OVERHAUL
@@ -606,690 +567,152 @@ css_dark_vars = """
   --input-text: #F0EDE8;
 """
 
-if st.session_state['theme_pref'] == "Dark":
-    theme_block = f":root {{{css_dark_vars}}}"
-elif st.session_state['theme_pref'] == "Light":
-    theme_block = f":root {{{css_light_vars}}}"
-else:
-    theme_block = f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}"
+if st.session_state['theme_pref'] == "Dark": theme_block = f":root {{{css_dark_vars}}}"
+elif st.session_state['theme_pref'] == "Light": theme_block = f":root {{{css_light_vars}}}"
+else: theme_block = f":root {{{css_light_vars}}} @media (prefers-color-scheme: dark) {{ :root {{{css_dark_vars}}} }}"
 
 css = theme_block + """
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; }
 
-.stApp {
-  background: var(--bg-primary) !important;
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-.block-container {
-  padding-top: 1.5rem !important;
-  padding-bottom: 6rem !important;
-  max-width: 940px !important;
-}
-
+.stApp { background: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; }
+.block-container { padding-top: 1.5rem !important; padding-bottom: 6rem !important; max-width: 940px !important; }
 #MainMenu, footer, header { display: none !important; }
 
 /* ══════════════════════════════
-   APP BAR
+   APP BAR & NAV
 ══════════════════════════════ */
-.app-bar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-}
-.wordmark {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: var(--text-main);
-  letter-spacing: -1.5px;
-  line-height: 1;
-}
-.tagline {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--text-subtle);
-  margin-top: 5px;
-  letter-spacing: 0.5px;
-}
-.live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--c-emerald-bg);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 100px;
-  padding: 5px 12px;
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  color: var(--c-emerald);
-  font-weight: 600;
-  letter-spacing: 1.5px;
-}
-.live-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-emerald);
-  animation: pulse 2s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.7); }
-}
+.app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
+.wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
+.tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.5px; }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--c-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 100px; padding: 5px 12px; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1.5px; }
+.live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-emerald); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.7); } }
 
-/* ══════════════════════════════
-   NAVIGATION (scoped to .nav-container)
-══════════════════════════════ */
-.nav-container div[role="radiogroup"] {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 2.5rem;
-    margin-top: -0.5rem;
-    background: transparent !important;
-}
-.nav-container div[role="radiogroup"] > label {
-    background: var(--surface) !important;
-    border: 1px solid var(--border-strong) !important;
-    border-radius: 100px !important;
-    padding: 8px 18px !important;
-    margin: 0 !important;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
-}
-.nav-container div[role="radiogroup"] > label:hover {
-    border-color: var(--text-muted) !important;
-    transform: translateY(-1px);
-}
-.nav-container div[role="radiogroup"] > label[data-checked="true"] {
-    background: var(--nav-pill) !important;
-    border-color: var(--nav-pill) !important;
-    box-shadow: var(--shadow-md);
-}
-.nav-container div[role="radiogroup"] > label div {
-    color: var(--text-muted) !important;
-    font-weight: 600 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.85rem !important;
-    letter-spacing: 0.5px !important;
-}
-.nav-container div[role="radiogroup"] > label[data-checked="true"] div {
-    color: var(--nav-pill-text) !important;
-    font-weight: 800 !important;
-}
+.nav-container div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
+.nav-container div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 8px 18px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+.nav-container div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; transform: translateY(-1px); }
+.nav-container div[role="radiogroup"] > label[data-checked="true"] { background: var(--nav-pill) !important; border-color: var(--nav-pill) !important; box-shadow: var(--shadow-md); }
+.nav-container div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem !important; letter-spacing: 0.5px !important; }
+.nav-container div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 800 !important; }
 .nav-container div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
 .nav-container div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 div[data-testid="stSegmentedControl"] { display: none !important; }
 
-/* ══════════════════════════════
-   SECTION HEADERS
-══════════════════════════════ */
-.s-head {
-  font-family: 'DM Mono', monospace !important;
-  font-size: 0.65rem;
-  letter-spacing: 2.5px;
-  color: var(--text-subtle);
-  margin: 2rem 0 1rem;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.settings-lbl {
-  font-family: 'DM Sans', sans-serif !important;
-  font-size: 0.85rem;
-  color: var(--text-main);
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  letter-spacing: 1px;
-}
+.s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
+.settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
+.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
+.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
 /* ══════════════════════════════
-   QUOTE BOX
+   GRID & CARDS
 ══════════════════════════════ */
-.quote-box {
-  text-align: center;
-  padding: 1.2rem 1.4rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  margin-bottom: 1.75rem;
-  box-shadow: var(--shadow-sm);
-}
-.quote-text {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  font-style: italic;
-  font-weight: 400;
-  line-height: 1.6;
-  letter-spacing: 0.1px;
-}
-
-/* ══════════════════════════════
-   METRIC CARDS GRID
-══════════════════════════════ */
-.mini-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 1.75rem;
-}
-.mini-cell {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.1rem 1rem;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease;
-}
+.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
+.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
 .mini-cell:hover { box-shadow: var(--shadow-md); }
-.mini-lbl {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  color: var(--text-subtle);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 8px;
-  display: block;
-}
-.mini-val {
-  font-family: 'DM Mono', monospace;
-  font-size: 1.55rem;
-  font-weight: 600;
-  color: var(--text-main);
-  line-height: 1;
-  display: inline-block;
-}
-.mini-unit {
-  font-size: 0.65rem;
-  color: var(--text-subtle);
-  margin-left: 2px;
-  font-weight: 400;
-}
-.mini-sub {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.65rem;
-  font-weight: 600;
-  margin-top: 8px;
-  display: block;
-  letter-spacing: 0.5px;
-}
+.mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
+.mini-val { font-family: 'DM Mono', monospace; font-size: 1.55rem; font-weight: 600; color: var(--text-main); line-height: 1; display: inline-block;}
+.mini-unit { font-size: 0.65rem; color: var(--text-subtle); margin-left: 2px; font-weight: 400;}
+.mini-sub { font-family: 'DM Mono', monospace; font-size: 0.65rem; font-weight: 600; margin-top: 8px; display: block; letter-spacing: 0.5px;}
 
-/* ══════════════════════════════
-   COLOR UTILITIES
-══════════════════════════════ */
-.c-ok  { color: var(--c-emerald) !important; }
-.c-wrn { color: var(--c-amber) !important; }
-.c-err { color: var(--c-rose) !important; }
-.c-neu { color: var(--text-muted) !important; }
-.c-blue { color: var(--c-blue) !important; }
+.c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; } .c-blue { color: var(--c-blue) !important; }
 
-/* ══════════════════════════════
-   CHART BLOCKS
-══════════════════════════════ */
-.chart-blk {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 1.2rem;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow-sm);
-}
-.chart-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 4px;
-}
-.t-chip {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  padding: 4px 9px;
-  border-radius: 100px;
-  font-weight: 600;
-  display: inline-block;
-  letter-spacing: 0.5px;
-}
+.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
+.chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.t-chip { font-family: 'DM Mono', monospace; font-size: 0.58rem; padding: 4px 9px; border-radius: 100px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;}
 .t-chip.c-ok  { background: var(--c-emerald-bg); color: var(--c-emerald) !important; }
 .t-chip.c-wrn { background: var(--c-amber-bg); color: var(--c-amber) !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
-.fit-note {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.62rem;
-  color: var(--text-subtle);
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 2px;
-  line-height: 1.5;
-}
-.data-note {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.62rem;
-  color: var(--text-subtle);
-  margin-top: -0.6rem;
-  margin-bottom: 1rem;
-}
+.fit-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; line-height: 1.5; }
+.data-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); margin-top: -0.6rem; margin-bottom: 1rem; }
 
-/* ══════════════════════════════
-   HUD DIAGNOSTIC CARDS
-══════════════════════════════ */
-.hud-card {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 1rem 1.1rem;
-  border-radius: 16px;
-  margin-bottom: 0.6rem;
-  box-shadow: var(--shadow-sm);
-}
-.hud-icon {
-  font-size: 1.1rem;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: var(--surface-active);
-  flex-shrink: 0;
-  line-height: 1;
-}
-.hud-title {
-  font-size: 0.78rem;
-  color: var(--text-main);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 3px;
-}
-.hud-desc {
-  font-size: 0.76rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
+.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
+.hud-icon { font-size: 1.1rem; width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
+.hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+.hud-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
 
-/* ══════════════════════════════
-   TRAJECTORY BARS
-══════════════════════════════ */
 .tj-blk { margin-bottom: 2.2rem; }
-.tj-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  align-items: flex-end;
-}
-.tj-nm {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-}
-.bar-tk {
-  height: 20px;
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 8px;
-  position: relative;
-}
-.bar-pin {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 3px;
-  background: var(--text-main);
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 12px rgba(255,255,255,0.3);
-  z-index: 5;
-  transform: translateX(-50%);
-  border-radius: 2px;
-}
-.tj-st {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  display: block;
-  margin-top: 8px;
-}
+.tj-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: flex-end; }
+.tj-nm { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; }
+.bar-tk { height: 20px; border-radius: 10px; overflow: hidden; margin-bottom: 8px; position: relative; }
+.bar-pin { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--text-main); box-shadow: 0 0 0 2px var(--bg-primary), 0 0 12px rgba(255,255,255,0.3); z-index: 5; transform: translateX(-50%); border-radius: 2px; }
+.tj-st { font-family: 'DM Mono', monospace; font-size: 0.58rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; display: block; margin-top: 8px; }
 
 /* ══════════════════════════════
    ACHIEVEMENTS / TIERS
 ══════════════════════════════ */
-.tier-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  margin-bottom: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-.tier-item.completed {
-  background: var(--c-blue-bg);
-  border-color: rgba(37,99,235,0.25);
-}
+.tier-item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.tier-item.completed { background: var(--c-blue-bg); border-color: rgba(37,99,235,0.25); }
 .tier-item.completed .tier-name { color: var(--c-blue); }
-.tier-item.current {
-  background: var(--c-blue-soft);
-  border-color: var(--c-blue);
-  box-shadow: 0 4px 20px rgba(37,99,235,0.15);
-}
+.tier-item.current { background: var(--c-blue-soft); border-color: var(--c-blue); box-shadow: 0 4px 20px rgba(37,99,235,0.15); }
 .tier-item.locked { opacity: 0.35; }
-.tier-emoji {
-  font-size: 1.4rem;
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-active);
-  border-radius: 10px;
-  flex-shrink: 0;
-}
+.tier-emoji { font-size: 1.4rem; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: var(--surface-active); border-radius: 10px; flex-shrink: 0; }
 .tier-details { flex-grow: 1; }
-.tier-name {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--text-main);
-  margin-bottom: 2px;
-}
-.tier-req {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--text-subtle);
-  letter-spacing: 0.5px;
-}
-.prog-tk {
-  height: 5px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 10px;
-}
-.prog-fill {
-  height: 100%;
-  background: var(--c-blue);
-  border-radius: 3px;
-  transition: width 0.6s ease;
-}
+.tier-name { font-weight: 700; font-size: 0.85rem; color: var(--text-main); margin-bottom: 2px; }
+.tier-req { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); letter-spacing: 0.5px; }
+.prog-tk { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+.prog-fill { height: 100%; background: var(--c-blue); border-radius: 3px; transition: width 0.6s ease; }
 
 /* ══════════════════════════════
    HISTORY ROWS
 ══════════════════════════════ */
-.hist-row {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s ease;
-}
+.hist-row { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; box-shadow: var(--shadow-sm); transition: box-shadow 0.15s ease; }
 .hist-row:hover { box-shadow: var(--shadow-md); }
-.del-btn button {
-    background: transparent !important;
-    border: none !important;
-    color: var(--text-subtle) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 1.2rem !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-}
-.del-btn button:hover {
-    color: var(--c-rose) !important;
-}
+.del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+.del-btn button:hover { color: var(--c-rose) !important; }
 
 /* ══════════════════════════════
-   ALERT BANNERS
+   ALERT BANNERS & INPUTS
 ══════════════════════════════ */
-.alert-banner {
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 1rem;
-  letter-spacing: 0.5px;
-}
-.alert-banner.warn {
-  background: var(--c-amber-bg);
-  border: 1px solid rgba(217,119,6,0.2);
-  color: var(--c-amber);
-}
-.alert-banner.danger {
-  background: var(--c-rose-bg);
-  border: 1px solid rgba(220,38,38,0.2);
-  color: var(--c-rose);
-}
-.alert-banner.info {
-  background: var(--c-blue-bg);
-  border: 1px solid rgba(37,99,235,0.2);
-  color: var(--c-blue);
-}
+.alert-banner { padding: 10px 14px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-align: center; margin-bottom: 1rem; letter-spacing: 0.5px; }
+.alert-banner.warn { background: var(--c-amber-bg); border: 1px solid rgba(217,119,6,0.2); color: var(--c-amber); }
+.alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
+.alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* ══════════════════════════════
-   SLIDERS & INPUTS
-══════════════════════════════ */
-div[data-testid="stSlider"] label {
-  font-family: 'DM Mono', monospace !important;
-  font-size: 0.65rem !important;
-  color: var(--text-subtle) !important;
-  text-transform: uppercase !important;
-  font-weight: 500 !important;
-  letter-spacing: 1.5px !important;
-}
-div[data-testid="stSlider"] > div > div > div {
-  height: 10px !important;
-  border-radius: 5px !important;
-  background: var(--surface-active) !important;
-}
-div[data-testid="stSlider"] div[role="slider"] {
-  width: 22px !important;
-  height: 22px !important;
-  background: var(--c-blue) !important;
-  border: 3px solid var(--bg-primary) !important;
-  box-shadow: var(--shadow-md) !important;
-}
+div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
+div[data-testid="stSlider"] > div > div > div { height: 10px !important; border-radius: 5px !important; background: var(--surface-active) !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
 
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
-div[data-testid="stSelectbox"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  color: var(--input-text) !important;
-  min-height: 3.2rem !important;
-  box-shadow: var(--shadow-sm) !important;
-}
-div[data-testid="stSelectbox"] div[class*="singleValue"] {
-  color: var(--input-text) !important;
-  font-weight: 600 !important;
-  font-family: 'DM Sans', sans-serif !important;
-}
-div[data-testid="stSelectbox"] [class*="placeholder"] {
-  color: var(--text-muted) !important;
-}
-div[data-testid="stSelectbox"] [class*="menu"] {
-  background: var(--surface) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-}
-div[data-testid="stSelectbox"] [class*="option"] {
-  color: var(--input-text) !important;
-  background: transparent !important;
-}
-div[data-testid="stSelectbox"] [class*="option"]:hover {
-  background: var(--surface-active) !important;
-}
+div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
+div[data-testid="stSelectbox"] div[class*="singleValue"] { color: var(--input-text) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
+div[data-testid="stSelectbox"] [class*="placeholder"] { color: var(--text-muted) !important; }
+div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; }
+div[data-testid="stSelectbox"] [class*="option"] { color: var(--input-text) !important; background: transparent !important; }
+div[data-testid="stSelectbox"] [class*="option"]:hover { background: var(--surface-active) !important; }
 
-div[data-testid="stTextInput"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  min-height: 3.2rem !important;
-}
-div[data-testid="stTextInput"] input {
-  color: var(--input-text) !important;
-  font-family: 'DM Mono', monospace !important;
-  font-size: 1rem !important;
-  text-align: center !important;
-  background: transparent !important;
-}
+div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
+div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; background: transparent !important; }
 
-/* ══════════════════════════════
-   BUTTONS
-══════════════════════════════ */
-div[data-testid="stForm"] button {
-  background: var(--text-main) !important;
-  color: var(--bg-primary) !important;
-  font-family: 'DM Sans', sans-serif !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  border: none !important;
-  border-radius: 100px !important;
-  padding: 1rem !important;
-  margin-top: 1.5rem !important;
-  text-transform: uppercase !important;
-  letter-spacing: 2px !important;
-  box-shadow: var(--shadow-md) !important;
-  transition: all 0.2s ease !important;
-}
-div[data-testid="stForm"] button:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: var(--shadow-lg) !important;
-}
+div[data-testid="stForm"] button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
+div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 
-.stButton > button {
-  background: var(--surface) !important;
-  color: var(--text-main) !important;
-  font-family: 'DM Sans', sans-serif !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 100px !important;
-  padding: 0.6rem 1.2rem !important;
-  margin-top: 0 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 1.5px !important;
-  box-shadow: var(--shadow-sm) !important;
-  transition: all 0.2s ease !important;
-}
-.stButton > button:hover {
-  background: var(--surface-active) !important;
-  box-shadow: var(--shadow-md) !important;
-}
+.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 0.6rem 1.2rem !important; margin-top: 0 !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; box-shadow: var(--shadow-sm) !important; transition: all 0.2s ease !important; }
+.stButton > button:hover { background: var(--surface-active) !important; box-shadow: var(--shadow-md) !important; }
 
-div[data-testid="stDateInput"] > div > div {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 12px !important;
-  color: var(--input-text) !important;
-}
-div[data-testid="stDateInput"] input {
-  color: var(--input-text) !important;
-}
+div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; }
+div[data-testid="stDateInput"] input { color: var(--input-text) !important; }
 
-/* Toggle */
-div[data-testid="stToggle"] label p {
-  color: var(--text-main) !important;
-  font-size: 0.85rem !important;
-}
+div[data-testid="stToggle"] label p { color: var(--text-main) !important; font-size: 0.85rem !important; }
+div[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 14px !important; overflow: hidden; }
+div[data-testid="stExpander"] summary p { color: var(--text-main) !important; font-size: 0.82rem !important; font-weight: 600 !important; }
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p { color: var(--text-main) !important; }
 
-/* Expander Force Light Mode Visibility */
-div[data-testid="stExpander"] {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  overflow: hidden;
-}
-div[data-testid="stExpander"] summary p {
-  color: var(--text-main) !important;
-  font-size: 0.82rem !important;
-  font-weight: 600 !important;
-}
-div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
-  color: var(--text-main) !important;
-}
+button[aria-label="Step down"], button[aria-label="Step up"], button[title="Step down"], button[title="Step up"] { display: none !important; }
+div[data-testid="stAlert"] { border-radius: 12px !important; }
+div[data-testid="stSelectbox"] > div > div { display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; }
+div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important; }
+div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; }
 
-/* Spinner steppers hidden */
-button[aria-label="Step down"], button[aria-label="Step up"],
-button[title="Step down"], button[title="Step up"] {
-  display: none !important;
-}
-
-/* Streamlit error/info messages */
-div[data-testid="stAlert"] {
-  border-radius: 12px !important;
-}
-
-/* Protocol selector center label */
-div[data-testid="stSelectbox"] > div > div {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-  width: 100% !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-div[data-testid="stSelectbox"] div[class*="singleValue"] {
-  text-align: center !important;
-  margin: 0 auto !important;
-  position: absolute;
-  left: 0;
-  right: 0;
-}
-
-/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
-/* Entry tab muscle mass mode radio – override any pill styling */
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 8px !important;
-  margin-right: 6px !important;
-  padding: 6px 14px !important;
-  font-family: 'DM Sans', sans-serif !important;
-  color: var(--text-muted) !important;
-}
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label[data-checked="true"] {
-  background: var(--surface-active) !important;
-  border-color: var(--border-strong) !important;
-  color: var(--text-main) !important;
-}
-@media (max-width: 760px) {
-  .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
-  .mini-grid { grid-template-columns: 1fr; }
-  .mini-cell[style*="grid-column"] { grid-column: span 1 !important; }
-  .chart-meta { flex-direction: column; gap: 12px; }
-  .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; }
-  .app-bar { align-items: flex-start; gap: 12px; }
-}
+div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; margin-right: 6px !important; padding: 6px 14px !important; font-family: 'DM Sans', sans-serif !important; color: var(--text-muted) !important; }
+div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label[data-checked="true"] { background: var(--surface-active) !important; border-color: var(--border-strong) !important; color: var(--text-main) !important; }
+@media (max-width: 760px) { .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } .mini-grid { grid-template-columns: 1fr; } .mini-cell[style*="grid-column"] { grid-column: span 1 !important; } .chart-meta { flex-direction: column; gap: 12px; } .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } .app-bar { align-items: flex-start; gap: 12px; } }
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
@@ -1346,10 +769,8 @@ if st.session_state['auth_status']:
         sheet_settings = load_app_settings(st.session_state['sheet_url'])
         settings_changed = apply_loaded_settings(sheet_settings)
         st.session_state['settings_loaded_for'] = current_user_key
-        if sheet_settings:
-            sync_query_params_from_settings()
-        if settings_changed:
-            st.rerun()
+        if sheet_settings: sync_query_params_from_settings()
+        if settings_changed: st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # DATA LOADING & STATISTICAL ENGINE (EMA for all metrics)
@@ -1378,7 +799,6 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
-# Isolate Data Before EMA Calculation to block ghost momentum
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
 if not df_window_full.empty:
@@ -1400,19 +820,17 @@ if has_enough_weight_data:
 
     X_w_raw = elapsed_days(df_w['Date'])
     
-    if 'Weight (kg)_EMA' not in df_w.columns:
-        df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
+    if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
     days_elapsed = max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0)
     
-    # Run ghost linear regression just to extract statistical noise (even if we override the slope)
     res_w = stats.linregress(X_w_raw, y_w)
     regression_stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
 
     if days_elapsed < 14 and len(y_w) >= 2:
         slope_w = (y_w[-1] - y_w[0]) / days_elapsed if days_elapsed > 0 else 0
-        stderr_w = regression_stderr_w # Ghost capture of noise for the UI
+        stderr_w = regression_stderr_w 
         fit_y_w = y_w[0] + (slope_w * X_w_raw)
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
@@ -1447,12 +865,10 @@ if has_enough_weight_data:
 
         pred_y_w = fit_y_w[0] + slope_w * future_days_w.flatten() if days_elapsed < 14 else res_w.intercept + slope_w * future_days_w.flatten()
         
-        # Calculate Base Root Mean Square Error and expand the Cone
         current_day_index_w = (df_w['Date'].max() - df_w['Date'].min()).days
         days_from_current_w = np.maximum(0, future_days_w.flatten() - current_day_index_w)
         rmse_w = np.sqrt(np.mean((y_w - fit_y_w)**2)) if len(y_w) > 0 else 0.5
         
-        # Expanding cone equation: Base Error + (Standard Error of Slope * Future Horizon * 95% CI Multiplier)
         margin_of_error_w = rmse_w + (stderr_w * days_from_current_w * 1.96)
 
         traj_data['Weight (kg)'] = {
@@ -1482,8 +898,7 @@ if has_enough_comp_data:
         future_dates_c = [df_c['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_c + 10)]
 
     for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
-        if f'{m}_EMA' not in df_c.columns:
-            df_c[f'{m}_EMA'] = df_c[m].ewm(alpha=0.15, adjust=False).mean()
+        if f'{m}_EMA' not in df_c.columns: df_c[f'{m}_EMA'] = df_c[m].ewm(alpha=0.15, adjust=False).mean()
             
         recent_dfs_for_plot[m] = df_c
         y_c = df_c[f'{m}_EMA'].values
@@ -1498,7 +913,10 @@ if has_enough_comp_data:
             
             ss_res_c = np.sum((y_c - fit_y_c)**2)
             ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
-            r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
+            
+            # Fix R2=0 bug for micro-variance in Body Fat
+            if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0
+            else: r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
             fit_type_c = 'point-to-point slope'
         else:
             slope_c = res_c.slope
@@ -1560,13 +978,12 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 6</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 7</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Check Phase lock
 days_elapsed_since_start = max(0, (datetime.now().date() - analysis_start.date()).days)
 
 # ══════════════════════════════════════════════════════════════
@@ -1625,30 +1042,37 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
-    w_val = float(last['Weight (kg)'])
-    w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
-    
-    mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
-    if mm_mode == "Kilograms (kg)":
-        m_val = float(last['Muscle Mass (kg)'])
-        m = st.slider("Muscle Mass (kg)", min_value=max(0.0, m_val-2.5), max_value=m_val+2.5, value=m_val, step=0.1)
-    else:
-        current_pct = (last['Muscle Mass (kg)'] / last['Weight (kg)']) * 100 if last['Weight (kg)'] > 0 else 45.0
-        m_pct = st.slider("Muscle Mass (%)", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1)
-        m = w * (m_pct / 100.0)
-        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:6px;'>Calculated muscle mass: {m:.1f} kg · Change input mode in Settings</div>", unsafe_allow_html=True)
+    if 'entry_w' not in st.session_state: st.session_state.entry_w = float(last['Weight (kg)'])
+    if 'entry_bf' not in st.session_state: st.session_state.entry_bf = float(last['Body Fat (%)'])
+    if 'entry_m' not in st.session_state: st.session_state.entry_m = float(last['Muscle Mass (kg)'])
+    if 'entry_m_pct' not in st.session_state: st.session_state.entry_m_pct = (st.session_state.entry_m / st.session_state.entry_w) * 100 if st.session_state.entry_w > 0 else 45.0
 
-    bf_val = float(last['Body Fat (%)'])
-    bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
+    def update_m_from_pct():
+        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
+
+    def update_pct_from_w():
+        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
+
+    st.slider("Weight (kg)", min_value=max(0.0, float(last['Weight (kg)'])-2.5), max_value=float(last['Weight (kg)'])+2.5, step=0.1, key="entry_w", on_change=update_pct_from_w)
+    
+    st.markdown("<div style='margin-top: 15px; margin-bottom: -15px; font-family:\"DM Mono\", monospace; font-size: 0.65rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px;'>Muscle Mass Input Mode</div>", unsafe_allow_html=True)
+    mm_mode = st.radio("Muscle Mass Input Mode", ["Kilograms (kg)", "Percentage (%)"], horizontal=True, label_visibility="collapsed")
+    
+    if mm_mode == "Kilograms (kg)":
+        st.slider("Muscle Mass (kg)", min_value=max(0.0, float(last['Muscle Mass (kg)'])-2.5), max_value=float(last['Muscle Mass (kg)'])+2.5, step=0.1, key="entry_m")
+    else:
+        st.slider("Muscle Mass (%)", min_value=max(0.0, st.session_state.entry_m_pct-5.0), max_value=min(100.0, st.session_state.entry_m_pct+5.0), step=0.1, key="entry_m_pct", on_change=update_m_from_pct)
+        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:6px;'>Calculated muscle mass: {st.session_state.entry_m:.1f} kg</div>", unsafe_allow_html=True)
+
+    st.slider("Body Fat (%)", min_value=max(3.0, float(last['Body Fat (%)'])-2.5), max_value=float(last['Body Fat (%)'])+2.5, step=0.1, key="entry_bf")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
             now_str = datetime.now().strftime('%Y-%m-%d')
-            append_body_entry(st.session_state['sheet_url'], now_str, w, m, bf)
-            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
+            append_body_entry(st.session_state['sheet_url'], now_str, st.session_state.entry_w, st.session_state.entry_m, st.session_state.entry_bf)
+            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [st.session_state.entry_w], 'Body Fat (%)': [st.session_state.entry_bf], 'Muscle Mass (kg)': [st.session_state.entry_m]})], ignore_index=True)
             load_data.clear()
-            if st.session_state['enable_quotes']:
-                st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
+            if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             system_alert("Saved")
             st.rerun()
 
@@ -1668,10 +1092,8 @@ elif app_view == "Nutrition":
     cal_offset = int(st.session_state['calorie_offset'])
     custom_prot = int(st.session_state['protein_custom'])
     
-    if g_curr == "male": 
-        bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) + 5
-    else: 
-        bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) - 161
+    if g_curr == "male": bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) + 5
+    else: bmr = (10 * w_curr) + (6.25 * h_curr) - (5 * a_curr) - 161
         
     tdee = bmr * ACTIVITY_MULTIPLIERS.get(act_lvl, 1.55)
     
@@ -1760,8 +1182,7 @@ elif app_view == "Trends":
     font_cfg = dict(family='DM Mono, monospace', size=9, color='rgba(128,128,128,0.8)')
 
     for metric in METRICS:
-        if metric != 'Weight (kg)' and not has_enough_comp_data:
-            continue
+        if metric != 'Weight (kg)' and not has_enough_comp_data: continue
 
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
