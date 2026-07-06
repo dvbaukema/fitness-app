@@ -124,12 +124,13 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     pct = max(min(pct, 97), 3)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    # Increased visibility for error bars
     err_pct_width = (err_rate / (2 * max_bound)) * 100 if max_bound > 0 else 0
     err_left = max(0, pct - err_pct_width)
     err_right = min(100, pct + err_pct_width)
     actual_err_width = err_right - err_left
-    err_html = f"<div style='position:absolute; top:2px; bottom:2px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.4; z-index:4; border-radius:4px;'></div>"
+    
+    # Highly visible horizontal error bar
+    err_html = f"<div style='position:absolute; top:4px; bottom:4px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.85; z-index:4; border-radius:2px;'></div>"
 
     html_block = f"""
     <div class='tj-blk'>
@@ -200,10 +201,8 @@ def parse_bool_setting(value, default=True):
     return bool(default)
 
 def parse_date_setting(value, default_value):
-    try:
-        return pd.to_datetime(value if value not in (None, "") else default_value).date()
-    except Exception:
-        return pd.to_datetime(default_value).date()
+    try: return pd.to_datetime(value if value not in (None, "") else default_value).date()
+    except Exception: return pd.to_datetime(default_value).date()
 
 def scale_rate_profile(profile, factor):
     return {metric: [v * factor for v in values] for metric, values in profile.items()}
@@ -223,16 +222,13 @@ st.markdown("""
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
-    
     const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset', 'calorie_custom', 'gym_start', 'mm_mode', 'enable_quotes', 'enable_achievements'];
-    
     keys.forEach(k => {
         const sk = 'metrics_' + k;
         const val = localStorage.getItem(sk);
         if (val && !urlParams.has(k)) { urlParams.set(k, val); redirect = true; } 
         else if (urlParams.has(k)) { localStorage.setItem(sk, urlParams.get(k)); }
     });
-
     if (redirect) {
         const newUrl = window.location.origin + window.location.pathname + '?' + urlParams.toString();
         window.location.replace(newUrl);
@@ -286,16 +282,11 @@ def load_body_constants(sheet_url):
 def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
     if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
-    
-    if 'Time' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-    else:
-        df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
-        
+    if 'Time' in df.columns: df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
+    else: df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
     for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
         if m in df.columns: df[m] = pd.to_numeric(df[m], errors='coerce')
         else: df[m] = np.nan
-            
     return df[['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']].sort_values('Date').dropna().reset_index(drop=True)
 
 def append_to_sheet(sheet_url, range_name, values):
@@ -304,10 +295,7 @@ def append_to_sheet(sheet_url, range_name, values):
     if not service or not sheet_id: return False
     try:
         body = {'values': values}
-        service.spreadsheets().values().append(
-            spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body
-        ).execute()
+        service.spreadsheets().values().append(spreadsheetId=sheet_id, range=range_name, valueInputOption='USER_ENTERED', insertDataOption='INSERT_ROWS', body=body).execute()
         return True
     except HttpError: return False
 
@@ -323,10 +311,7 @@ def overwrite_sheet_range(sheet_url, range_name, df):
         service.spreadsheets().values().clear(spreadsheetId=sheet_id, range=range_name).execute()
         values = [df.columns.tolist()] + df.values.tolist()
         body = {'values': values}
-        service.spreadsheets().values().update(
-            spreadsheetId=sheet_id, range=range_name,
-            valueInputOption='USER_ENTERED', body=body
-        ).execute()
+        service.spreadsheets().values().update(spreadsheetId=sheet_id, range=range_name, valueInputOption='USER_ENTERED', body=body).execute()
         return True
     except HttpError: return False
 
@@ -335,7 +320,6 @@ def overwrite_body_sheet(sheet_url, df):
     for _, row in df.iterrows():
         d = pd.Timestamp(row['Date'])
         values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
-    
     out_df = pd.DataFrame(values[1:], columns=values[0])
     return overwrite_sheet_range(sheet_url, 'Data!A:E', out_df)
 
@@ -347,10 +331,7 @@ def ensure_sheet_tab(sheet_url, tab_name):
         meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         titles = [s.get('properties', {}).get('title') for s in meta.get('sheets', [])]
         if tab_name not in titles:
-            service.spreadsheets().batchUpdate(
-                spreadsheetId=sheet_id,
-                body={'requests': [{'addSheet': {'properties': {'title': tab_name}}}]}
-            ).execute()
+            service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={'requests': [{'addSheet': {'properties': {'title': tab_name}}}]}).execute()
         return True
     except HttpError: return False
 
@@ -491,8 +472,7 @@ if 'calorie_offset' not in st.session_state: st.session_state['calorie_offset'] 
 if 'calorie_custom' not in st.session_state: st.session_state['calorie_custom'] = parse_int_setting(st.query_params.get("calorie_custom", DEFAULT_SETTINGS['calorie_custom']), DEFAULT_SETTINGS['calorie_custom'])
 if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] = parse_int_setting(st.query_params.get("protein_custom", DEFAULT_SETTINGS['protein_custom']), DEFAULT_SETTINGS['protein_custom'])
 if 'muscle_mass_input_mode' not in st.session_state: st.session_state['muscle_mass_input_mode'] = st.query_params.get("mm_mode", DEFAULT_SETTINGS['muscle_mass_input_mode'])
-if st.session_state['muscle_mass_input_mode'] not in MUSCLE_INPUT_MODES:
-    st.session_state['muscle_mass_input_mode'] = DEFAULT_SETTINGS['muscle_mass_input_mode']
+if st.session_state['muscle_mass_input_mode'] not in MUSCLE_INPUT_MODES: st.session_state['muscle_mass_input_mode'] = DEFAULT_SETTINGS['muscle_mass_input_mode']
 
 if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = parse_date_setting(st.query_params.get("gym_start"), DEFAULT_SETTINGS['gym_start'])
 if 'analysis_start_date' not in st.session_state: st.session_state['analysis_start_date'] = parse_date_setting(st.query_params.get("start"), DEFAULT_SETTINGS['analysis_start'])
@@ -625,7 +605,10 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .t-chip.c-wrn { background: var(--c-amber-bg); color: var(--c-amber) !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
-.fit-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; line-height: 1.5; }
+
+/* Condensed Fit Note */
+.fit-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; line-height: 1.4; display: flex; justify-content: space-between; align-items: center;}
+.fit-note-val { color: var(--text-main); font-weight: 600; }
 .data-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); margin-top: -0.6rem; margin-bottom: 1rem; }
 
 .hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
@@ -671,9 +654,11 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
-div[data-testid="stSlider"] > div > div > div { height: 10px !important; border-radius: 5px !important; background: var(--surface-active) !important; }
-div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
+/* Clean Sliders */
+div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; margin-bottom: 4px !important;}
+div[data-testid="stSlider"] > div > div > div { height: 6px !important; border-radius: 3px !important; background: var(--border-strong) !important; }
+div[data-testid="stSlider"] div[role="slider"] { width: 18px !important; height: 18px !important; background: var(--c-blue) !important; border: none !important; box-shadow: var(--shadow-md) !important; }
+div[data-testid="stSlider"] div[data-baseweb="slider"] { margin-bottom: 0px !important; }
 
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
@@ -710,8 +695,6 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !i
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; margin-right: 6px !important; padding: 6px 14px !important; font-family: 'DM Sans', sans-serif !important; color: var(--text-muted) !important; }
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label[data-checked="true"] { background: var(--surface-active) !important; border-color: var(--border-strong) !important; color: var(--text-main) !important; }
 @media (max-width: 760px) { .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } .mini-grid { grid-template-columns: 1fr; } .mini-cell[style*="grid-column"] { grid-column: span 1 !important; } .chart-meta { flex-direction: column; gap: 12px; } .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } .app-bar { align-items: flex-start; gap: 12px; } }
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
@@ -773,7 +756,7 @@ if st.session_state['auth_status']:
         if settings_changed: st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-# DATA LOADING & STATISTICAL ENGINE (EMA for all metrics)
+# DATA LOADING & STATISTICAL ENGINE
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url): 
@@ -799,6 +782,7 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
+# Isolate Data Before EMA Calculation to block ghost momentum
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
 if not df_window_full.empty:
@@ -819,7 +803,6 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
-    
     if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
@@ -835,15 +818,16 @@ if has_enough_weight_data:
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
         ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
-        r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
+        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 # Force mathematically accurate R2 for microvariance
+        else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
-        fit_type_w = 'point-to-point slope'
+        fit_type_w = 'point-to-point'
     else:
         slope_w = res_w.slope
         stderr_w = regression_stderr_w
         r2_w = 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2
         fit_y_w = res_w.intercept + slope_w * X_w_raw
-        fit_type_w = 'linear regression'
+        fit_type_w = 'linear fit'
 
     daily_slopes['Weight (kg)'] = slope_w
     weekly_trends['Weight (kg)'] = slope_w * 7
@@ -881,10 +865,7 @@ if has_enough_weight_data:
             'fit': fit_y_w,
         }
     else:
-        traj_data['Weight (kg)'] = {
-            'fit_dates': df_w['Date'].tolist(),
-            'fit': fit_y_w,
-        }
+        traj_data['Weight (kg)'] = {'fit_dates': df_w['Date'].tolist(), 'fit': fit_y_w}
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5).copy()
@@ -913,17 +894,15 @@ if has_enough_comp_data:
             
             ss_res_c = np.sum((y_c - fit_y_c)**2)
             ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
-            
-            # Fix R2=0 bug for micro-variance in Body Fat
-            if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0
+            if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0 # Force mathematically accurate R2 for microvariance
             else: r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
-            fit_type_c = 'point-to-point slope'
+            fit_type_c = 'point-to-point'
         else:
             slope_c = res_c.slope
             stderr_c = regression_stderr_c
             r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
             fit_y_c = res_c.intercept + slope_c * X_c_raw
-            fit_type_c = 'linear regression'
+            fit_type_c = 'linear fit'
 
         daily_slopes[m] = slope_c
         weekly_trends[m] = slope_c * 7
@@ -956,10 +935,7 @@ if has_enough_comp_data:
                 'fit': fit_y_c,
             }
         else:
-            traj_data[m] = {
-                'fit_dates': df_c['Date'].tolist(),
-                'fit': fit_y_c,
-            }
+            traj_data[m] = {'fit_dates': df_c['Date'].tolist(), 'fit': fit_y_c}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -978,7 +954,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 7</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 8</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1042,27 +1018,26 @@ if app_view == "Entry":
     <div class="s-head">New Entry</div>
     """, unsafe_allow_html=True)
 
+    # UI Sliders (Callbacks ensure calculation works perfectly)
     if 'entry_w' not in st.session_state: st.session_state.entry_w = float(last['Weight (kg)'])
     if 'entry_bf' not in st.session_state: st.session_state.entry_bf = float(last['Body Fat (%)'])
     if 'entry_m' not in st.session_state: st.session_state.entry_m = float(last['Muscle Mass (kg)'])
     if 'entry_m_pct' not in st.session_state: st.session_state.entry_m_pct = (st.session_state.entry_m / st.session_state.entry_w) * 100 if st.session_state.entry_w > 0 else 45.0
 
-    def update_m_from_pct():
+    def sync_m_from_pct():
+        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
+        
+    def sync_m_from_w():
         st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
 
-    def update_pct_from_w():
-        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
-
-    st.slider("Weight (kg)", min_value=max(0.0, float(last['Weight (kg)'])-2.5), max_value=float(last['Weight (kg)'])+2.5, step=0.1, key="entry_w", on_change=update_pct_from_w)
+    st.slider("Weight (kg)", min_value=max(0.0, float(last['Weight (kg)'])-2.5), max_value=float(last['Weight (kg)'])+2.5, step=0.1, key="entry_w", on_change=sync_m_from_w)
     
-    st.markdown("<div style='margin-top: 15px; margin-bottom: -15px; font-family:\"DM Mono\", monospace; font-size: 0.65rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px;'>Muscle Mass Input Mode</div>", unsafe_allow_html=True)
-    mm_mode = st.radio("Muscle Mass Input Mode", ["Kilograms (kg)", "Percentage (%)"], horizontal=True, label_visibility="collapsed")
-    
+    mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         st.slider("Muscle Mass (kg)", min_value=max(0.0, float(last['Muscle Mass (kg)'])-2.5), max_value=float(last['Muscle Mass (kg)'])+2.5, step=0.1, key="entry_m")
     else:
-        st.slider("Muscle Mass (%)", min_value=max(0.0, st.session_state.entry_m_pct-5.0), max_value=min(100.0, st.session_state.entry_m_pct+5.0), step=0.1, key="entry_m_pct", on_change=update_m_from_pct)
-        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:6px;'>Calculated muscle mass: {st.session_state.entry_m:.1f} kg</div>", unsafe_allow_html=True)
+        st.slider("Muscle Mass (%)", min_value=max(0.0, st.session_state.entry_m_pct-5.0), max_value=min(100.0, st.session_state.entry_m_pct+5.0), step=0.1, key="entry_m_pct", on_change=sync_m_from_pct)
+        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:6px;'>Calculated: {st.session_state.entry_m:.1f} kg</div>", unsafe_allow_html=True)
 
     st.slider("Body Fat (%)", min_value=max(3.0, float(last['Body Fat (%)'])-2.5), max_value=float(last['Body Fat (%)'])+2.5, step=0.1, key="entry_bf")
 
@@ -1300,16 +1275,25 @@ elif app_view == "Trends":
 
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
+            margin=dict(l=0, r=0, t=20, b=45), height=320, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
             yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear regression'})
+        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear fit'})
         st.markdown(
-            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange {fit['type']} estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}. Error bars reflect Tanita RD-953 precision (±1% mass variation, ±5% DEXA relative accuracy for body fat).</div>",
+            f"""<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px;">
+                <div style="font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); line-height: 1.4;">
+                    <b>Algorithm:</b> EMA smoothed → {fit['type'].title()}<br>
+                    <b>Horizon:</b> {fit['n']} logs over {fit['days']:.1f} days
+                </div>
+                <div style="font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); line-height: 1.4; text-align:right;">
+                    <b>Variance (R²):</b> {fit['r2']:.2f}<br>
+                    <b>Error Margins:</b> ±{err_pct}% BIA spec
+                </div>
+            </div>""",
             unsafe_allow_html=True
         )
         st.markdown("</div>", unsafe_allow_html=True)
