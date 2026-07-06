@@ -1363,12 +1363,13 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
-# Calculate EMA for all three metrics (alpha=0.15 for consistency)
-if not df.empty:
-    for metric in METRICS:
-        df[f'{metric}_EMA'] = df[metric].ewm(alpha=0.15, adjust=False).mean()
-
+# ── FIX: ISOLATE DATA FIRST BEFORE EMA ──
+# This prevents the EMA from pulling momentum from old phases prior to the start date
 df_window_full = df[df['Date'] >= analysis_start].copy()
+
+if not df_window_full.empty:
+    for metric in METRICS:
+        df_window_full[f'{metric}_EMA'] = df_window_full[metric].ewm(alpha=0.15, adjust=False).mean()
 
 has_enough_weight_data = len(df_window_full) >= 3 or len(df) >= 3
 has_enough_comp_data = len(df_window_full) >= 5 or len(df) >= 5
@@ -1384,6 +1385,11 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
+    
+    # If using df.tail (because active window < 3), we need to ensure the column exists
+    if 'Weight (kg)_EMA' not in df_w.columns:
+        df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
+        
     y_w = df_w['Weight (kg)_EMA'].values
     
     days_elapsed = max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0)
@@ -1393,12 +1399,14 @@ if has_enough_weight_data:
         stderr_w = 0 
         r2_w = 1.0
         fit_y_w = y_w[0] + (slope_w * X_w_raw)
+        fit_type_w = 'point-to-point slope'
     else:
         res_w = stats.linregress(X_w_raw, y_w)
         slope_w = res_w.slope
         stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
         r2_w = 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2
         fit_y_w = res_w.intercept + slope_w * X_w_raw
+        fit_type_w = 'linear regression'
 
     daily_slopes['Weight (kg)'] = slope_w
     weekly_trends['Weight (kg)'] = slope_w * 7
@@ -1409,6 +1417,7 @@ if has_enough_weight_data:
         'days': days_elapsed,
         'r2': r2_w,
         'slope': slope_w,
+        'type': fit_type_w
     }
 
     days_to_end_w = (target_end_date.date() - df_w['Date'].min().date()).days
@@ -1446,6 +1455,9 @@ if has_enough_comp_data:
         future_dates_c = [df_c['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_c + 10)]
 
     for m in ['Muscle Mass (kg)', 'Body Fat (%)']:
+        if f'{m}_EMA' not in df_c.columns:
+            df_c[f'{m}_EMA'] = df_c[m].ewm(alpha=0.15, adjust=False).mean()
+            
         recent_dfs_for_plot[m] = df_c
         y_c = df_c[f'{m}_EMA'].values
 
@@ -1454,12 +1466,14 @@ if has_enough_comp_data:
             stderr_c = 0 
             r2_c = 1.0
             fit_y_c = y_c[0] + (slope_c * X_c_raw)
+            fit_type_c = 'point-to-point slope'
         else:
             res_c = stats.linregress(X_c_raw, y_c)
             slope_c = res_c.slope
             stderr_c = 0 if pd.isna(res_c.stderr) else res_c.stderr
             r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
             fit_y_c = res_c.intercept + slope_c * X_c_raw
+            fit_type_c = 'linear regression'
 
         daily_slopes[m] = slope_c
         weekly_trends[m] = slope_c * 7
@@ -1470,6 +1484,7 @@ if has_enough_comp_data:
             'days': days_elapsed_c,
             'r2': r2_c,
             'slope': slope_c,
+            'type': fit_type_c
         }
 
         if future_days_c is not None:
@@ -1505,7 +1520,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 3</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 4</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1816,9 +1831,9 @@ elif app_view == "Trends":
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0})
+        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear regression'})
         st.markdown(
-            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange linear fit estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}.</div>",
+            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange {fit['type']} estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}.</div>",
             unsafe_allow_html=True
         )
         st.markdown("</div>", unsafe_allow_html=True)
