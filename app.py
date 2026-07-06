@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ══════════════════════════════════════════════════════════════
-# GLOBAL HELPER FUNCTIONS (LOCKED AT TOP TO PREVENT NAME ERRORS)
+# GLOBAL HELPER FUNCTIONS
 # ══════════════════════════════════════════════════════════════
 def system_alert(message, kind="ok"):
     bg = "#10B981" if kind == "ok" else "#EF4444"
@@ -102,7 +102,7 @@ def hud_card(kind, icon, title, desc):
       </div>
     </div>"""
 
-def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_rate=0):
     tgt_rate = profile[metric][0]
     s = sgn(actual_rate); ts = sgn(tgt_rate)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
@@ -124,6 +124,13 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     pct = max(min(pct, 97), 3)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
+    # Error bar math
+    err_pct_width = (err_rate / (2 * max_bound)) * 100 if max_bound > 0 else 0
+    err_left = max(0, pct - err_pct_width)
+    err_right = min(100, pct + err_pct_width)
+    actual_err_width = err_right - err_left
+    err_html = f"<div style='position:absolute; top:0; bottom:0; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.18; z-index:4; border-radius:4px;'></div>"
+
     html_block = f"""
     <div class='tj-blk'>
       <div class='tj-row' style='margin-bottom:10px;'>
@@ -134,12 +141,14 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
           </div>
         </div>
       </div>
-      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
+      <div class='bar-tk' style='background: {bg_grad};'>
+        {err_html}
+        <div class='bar-pin' style='left: {pct}%;'></div>
+      </div>
       {bounds_html}
       <div class='tj-st {c_txt}'>{status}</div>
     </div>"""
     return html_block
-
 
 # ══════════════════════════════════════════════════════════════
 # HARDCODED PROTOCOL TARGETS
@@ -1369,8 +1378,7 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
-# ── FIX: ISOLATE DATA FIRST BEFORE EMA ──
-# This prevents the EMA from pulling momentum from old phases prior to the start date
+# Isolate Data Before EMA Calculation to block ghost momentum
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
 if not df_window_full.empty:
@@ -1396,12 +1404,15 @@ if has_enough_weight_data:
         df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
-    
     days_elapsed = max(float(np.nanmax(X_w_raw) - np.nanmin(X_w_raw)), 0.0)
     
+    # Run ghost linear regression just to extract statistical noise (even if we override the slope)
+    res_w = stats.linregress(X_w_raw, y_w)
+    regression_stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
+
     if days_elapsed < 14 and len(y_w) >= 2:
         slope_w = (y_w[-1] - y_w[0]) / days_elapsed if days_elapsed > 0 else 0
-        stderr_w = 0 
+        stderr_w = regression_stderr_w # Ghost capture of noise for the UI
         fit_y_w = y_w[0] + (slope_w * X_w_raw)
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
@@ -1410,9 +1421,8 @@ if has_enough_weight_data:
         
         fit_type_w = 'point-to-point slope'
     else:
-        res_w = stats.linregress(X_w_raw, y_w)
         slope_w = res_w.slope
-        stderr_w = 0 if pd.isna(res_w.stderr) else res_w.stderr
+        stderr_w = regression_stderr_w
         r2_w = 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2
         fit_y_w = res_w.intercept + slope_w * X_w_raw
         fit_type_w = 'linear regression'
@@ -1426,6 +1436,7 @@ if has_enough_weight_data:
         'days': days_elapsed,
         'r2': r2_w,
         'slope': slope_w,
+        'stderr': stderr_w,
         'type': fit_type_w
     }
 
@@ -1435,7 +1446,14 @@ if has_enough_weight_data:
         future_dates_w = [df_w['Date'].min() + timedelta(days=i) for i in range(0, days_to_end_w + 10)]
 
         pred_y_w = fit_y_w[0] + slope_w * future_days_w.flatten() if days_elapsed < 14 else res_w.intercept + slope_w * future_days_w.flatten()
-        margin_of_error_w = stderr_w * future_days_w.flatten() * 1.96
+        
+        # Calculate Base Root Mean Square Error and expand the Cone
+        current_day_index_w = (df_w['Date'].max() - df_w['Date'].min()).days
+        days_from_current_w = np.maximum(0, future_days_w.flatten() - current_day_index_w)
+        rmse_w = np.sqrt(np.mean((y_w - fit_y_w)**2)) if len(y_w) > 0 else 0.5
+        
+        # Expanding cone equation: Base Error + (Standard Error of Slope * Future Horizon * 95% CI Multiplier)
+        margin_of_error_w = rmse_w + (stderr_w * days_from_current_w * 1.96)
 
         traj_data['Weight (kg)'] = {
             'dates': future_dates_w,
@@ -1470,9 +1488,12 @@ if has_enough_comp_data:
         recent_dfs_for_plot[m] = df_c
         y_c = df_c[f'{m}_EMA'].values
 
+        res_c = stats.linregress(X_c_raw, y_c)
+        regression_stderr_c = 0 if pd.isna(res_c.stderr) else res_c.stderr
+
         if days_elapsed_c < 14 and len(y_c) >= 2:
             slope_c = (y_c[-1] - y_c[0]) / days_elapsed_c if days_elapsed_c > 0 else 0
-            stderr_c = 0 
+            stderr_c = regression_stderr_c 
             fit_y_c = y_c[0] + (slope_c * X_c_raw)
             
             ss_res_c = np.sum((y_c - fit_y_c)**2)
@@ -1480,9 +1501,8 @@ if has_enough_comp_data:
             r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
             fit_type_c = 'point-to-point slope'
         else:
-            res_c = stats.linregress(X_c_raw, y_c)
             slope_c = res_c.slope
-            stderr_c = 0 if pd.isna(res_c.stderr) else res_c.stderr
+            stderr_c = regression_stderr_c
             r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
             fit_y_c = res_c.intercept + slope_c * X_c_raw
             fit_type_c = 'linear regression'
@@ -1496,12 +1516,17 @@ if has_enough_comp_data:
             'days': days_elapsed_c,
             'r2': r2_c,
             'slope': slope_c,
+            'stderr': stderr_c,
             'type': fit_type_c
         }
 
         if future_days_c is not None:
             pred_y_c = fit_y_c[0] + slope_c * future_days_c.flatten() if days_elapsed_c < 14 else res_c.intercept + slope_c * future_days_c.flatten()
-            margin_of_error_c = stderr_c * future_days_c.flatten() * 1.96
+            
+            current_day_index_c = (df_c['Date'].max() - df_c['Date'].min()).days
+            days_from_current_c = np.maximum(0, future_days_c.flatten() - current_day_index_c)
+            rmse_c = np.sqrt(np.mean((y_c - fit_y_c)**2)) if len(y_c) > 0 else 0.5
+            margin_of_error_c = rmse_c + (stderr_c * days_from_current_c * 1.96)
 
             traj_data[m] = {
                 'dates': future_dates_c,
@@ -1535,7 +1560,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 5</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 6</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1755,22 +1780,25 @@ elif app_view == "Trends":
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
-            proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
+            proj_html = f"<div style='font-family:\"Inter\", sans-serif; font-size:0.75rem; color:var(--text-subtle); margin-top:4px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:700;'>{lower_proj:.1f} - {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
         
         st.markdown(f"""
         <div class="chart-blk">
-            <div class="chart-meta">
+            <div class="chart-meta" style="align-items: flex-start;">
                 <div>
-                    <div style="font-size:0.7rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:1.5px; font-family:'DM Mono',monospace;">{METRIC_SHORT[metric]}</div>
-                    <div style="font-size:2rem; font-weight:700; color:var(--text-main); line-height:1.1; margin-top:2px; font-family:'DM Mono',monospace;">{last_val:.1f}<span style="font-size:0.9rem; color:var(--text-subtle); font-weight:400; margin-left:3px;">{unit}</span></div>
+                    <div style="font-size:0.9rem; color:var(--text-main); font-weight:800; letter-spacing:1px; text-transform:uppercase;">
+                        {METRIC_SHORT[metric]} 
+                        <span style="font-family:'Inter', sans-serif; font-weight:800; color:var(--text-main); margin-left:8px; font-size:1.5rem;">
+                            {last_val:.1f} <span style="font-size:0.9rem; color:var(--text-muted);">{unit}</span>
+                        </span>
+                    </div>
                     {proj_html}
                 </div>
-                <div style="text-align: right; display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
-                    <span class="t-chip {c_txt}" style="display:block;">{sgn(weekly_trend)}{weekly_trend:.2f}/wk</span>
-                    <span class="t-chip c-neu" style="display:block;">{sgn(monthly_trend)}{monthly_trend:.2f}/mo</span>
-                    <span class="t-chip c-neu" style="display:block;">TGT {sgn(weekly_target)}{weekly_target:.2f}/wk</span>
+                <div style="text-align: right;">
+                    <span class="t-chip {c_bg} {c_txt}" style="margin-bottom:4px;">ACTUAL {sgn(weekly_trend)}{weekly_trend:.2f} /wk</span><br>
+                    <span class="t-chip bg-neu c-neu">TARGET {sgn(weekly_target)}{weekly_target:.2f} /wk</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -1781,8 +1809,8 @@ elif app_view == "Trends":
         fig.add_trace(go.Scatter(
             x=df_hist['Date'], y=df_hist[metric],
             mode='lines+markers', name='History',
-            line=dict(color='rgba(128,128,128,0.2)', width=1.5),
-            marker=dict(size=3, color='rgba(128,128,128,0.25)'),
+            line=dict(color='rgba(150,150,150,0.4)', width=1.5),
+            marker=dict(size=4, color='rgba(150,150,150,0.4)'),
             error_y=dict(type='percent', value=err_pct, color='rgba(128,128,128,0.1)', thickness=1, width=2),
             hoverinfo='skip'
         ))
@@ -1820,10 +1848,10 @@ elif app_view == "Trends":
             y_lower = traj_data[metric]['lower']
             
             fig.add_trace(go.Scatter(
-                x=x_vals + x_vals[::-1],
+                x=list(x_vals) + list(x_vals)[::-1],
                 y=list(y_upper) + list(y_lower)[::-1],
                 fill='toself', fillcolor='rgba(59,130,246,0.08)',
-                line=dict(color='rgba(0,0,0,0)'),
+                line=dict(color='rgba(255,255,255,0)'),
                 hoverinfo="skip", showlegend=False
             ))
             
@@ -1835,31 +1863,26 @@ elif app_view == "Trends":
             ))
         
         epoch_date = spec_recent['Date'].min()
-        fig.add_vline(x=epoch_date, line_width=1.5, line_dash="solid", line_color="rgba(128,128,128,0.4)",
-                      annotation_text="START", annotation_position="bottom right",
-                      annotation_font_size=9, annotation_font_color="rgba(128,128,128,0.6)")
-
+        fig.add_vline(x=epoch_date, line_width=2, line_dash="solid", line_color="#888888", annotation_text="START", annotation_position="bottom right", annotation_font_size=10, annotation_font_color="#888888")
+        
         current_date = spec_recent['Date'].max()
         daily_rate = ideal_rates[metric][0] / 30.0
+        
         days_span = (target_end_date.date() - current_date.date()).days
         if days_span > 0 and ema_col in spec_recent.columns:
             latest_ema = spec_recent[ema_col].iloc[-1]
             goal_val = latest_ema + daily_rate * days_span
-            fig.add_trace(go.Scatter(
-                x=[target_end_date], y=[goal_val],
-                mode='markers', name='Protocol target',
-                marker=dict(size=8, color='#10B981', symbol='diamond', line=dict(width=1.5, color='white')),
-                hoverinfo='skip'
-            ))
+            
+            fig.add_vline(x=target_end_date, line_width=1.5, line_dash="dash", line_color="#10B981", annotation_text=end_label, annotation_position="top left", annotation_font_size=10, annotation_font_color="#10B981")
+            fig.add_trace(go.Scatter(x=[target_end_date], y=[goal_val], mode='markers+text', name=f'{end_label} Goal', marker=dict(size=8, color='#10B981', symbol='diamond'), text=[f"{goal_val:.1f}{unit}"], textposition="middle right", textfont=dict(color="#10B981", size=10, family="Inter"), hoverinfo='skip'))
+            fig.add_trace(go.Scatter(x=[current_date, target_end_date], y=[latest_ema, goal_val], mode='lines', name='Target Path', line=dict(color='gray', width=1.5, dash='dot'), opacity=0.7, hoverinfo='skip'))
 
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=16, b=40), height=225, showlegend=True,
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0, font=font_cfg),
-            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d',
-                       range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.08)', zeroline=False,
-                       tickfont=font_cfg, side='right')
+            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
+            xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
+            yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
@@ -1889,6 +1912,10 @@ elif app_view == "Analysis":
     wt_month = monthly_trends.get('Weight (kg)', 0)
     mmt_month = monthly_trends.get('Muscle Mass (kg)', 0)
     bft_month = monthly_trends.get('Body Fat (%)', 0)
+
+    wt_err = trend_stats.get('Weight (kg)', {}).get('stderr', 0) * 7
+    mmt_err = trend_stats.get('Muscle Mass (kg)', {}).get('stderr', 0) * 7
+    bft_err = trend_stats.get('Body Fat (%)', {}).get('stderr', 0) * 7
 
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_weekly_rates, mmt, bft)
 
@@ -1923,11 +1950,11 @@ elif app_view == "Analysis":
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_weekly_rates, "kg/wk", mmt, bft), unsafe_allow_html=True)
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_weekly_rates, "kg/wk", mmt, bft, wt_err), unsafe_allow_html=True)
     if has_enough_comp_data:
         st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_weekly_rates, "kg/wk", mmt, bft) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_weekly_rates, "%/wk", mmt, bft),
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_weekly_rates, "kg/wk", mmt, bft, mmt_err) +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_weekly_rates, "%/wk", mmt, bft, bft_err),
             unsafe_allow_html=True
         )
 
