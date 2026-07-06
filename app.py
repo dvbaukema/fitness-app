@@ -1206,7 +1206,7 @@ div[data-testid="stToggle"] label p {
   font-size: 0.85rem !important;
 }
 
-/* Expander */
+/* Expander Force Light Mode Visibility */
 div[data-testid="stExpander"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
@@ -1222,12 +1222,18 @@ div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p {
   color: var(--text-main) !important;
 }
 
+/* Spinner steppers hidden */
 button[aria-label="Step down"], button[aria-label="Step up"],
-button[title="Step down"], button[title="Step up"] { display: none !important; }
+button[title="Step down"], button[title="Step up"] {
+  display: none !important;
+}
 
-div[data-testid="stAlert"] { border-radius: 12px !important; }
+/* Streamlit error/info messages */
+div[data-testid="stAlert"] {
+  border-radius: 12px !important;
+}
 
-/* Protocol Selector Center */
+/* Protocol selector center label */
 div[data-testid="stSelectbox"] > div > div {
   display: flex !important;
   align-items: center !important;
@@ -1386,7 +1392,6 @@ if has_enough_weight_data:
 
     X_w_raw = elapsed_days(df_w['Date'])
     
-    # If using df.tail (because active window < 3), we need to ensure the column exists
     if 'Weight (kg)_EMA' not in df_w.columns:
         df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
@@ -1397,8 +1402,12 @@ if has_enough_weight_data:
     if days_elapsed < 14 and len(y_w) >= 2:
         slope_w = (y_w[-1] - y_w[0]) / days_elapsed if days_elapsed > 0 else 0
         stderr_w = 0 
-        r2_w = 1.0
         fit_y_w = y_w[0] + (slope_w * X_w_raw)
+        
+        ss_res_w = np.sum((y_w - fit_y_w)**2)
+        ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
+        r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
+        
         fit_type_w = 'point-to-point slope'
     else:
         res_w = stats.linregress(X_w_raw, y_w)
@@ -1464,8 +1473,11 @@ if has_enough_comp_data:
         if days_elapsed_c < 14 and len(y_c) >= 2:
             slope_c = (y_c[-1] - y_c[0]) / days_elapsed_c if days_elapsed_c > 0 else 0
             stderr_c = 0 
-            r2_c = 1.0
             fit_y_c = y_c[0] + (slope_c * X_c_raw)
+            
+            ss_res_c = np.sum((y_c - fit_y_c)**2)
+            ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
+            r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
             fit_type_c = 'point-to-point slope'
         else:
             res_c = stats.linregress(X_c_raw, y_c)
@@ -1509,6 +1521,9 @@ if has_enough_comp_data:
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
 # ══════════════════════════════════════════════════════════════
+active_goal = st.session_state.get('current_goal', 'Lean Bulk')
+ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_state['goal_profiles']['Lean Bulk'])
+
 header_placeholder = st.empty()
 
 # Navigation wrapped in scoped container
@@ -1520,7 +1535,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 4</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 5</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1730,15 +1745,20 @@ elif app_view == "Trends":
         weekly_target = ideal_weekly_rates[metric][0]
         c_txt, c_bg, _, hex_col = eval_metric(metric, weekly_trend, ideal_weekly_rates)
 
+        if metric == 'Weight (kg)': err_pct = 1.0
+        elif metric == 'Muscle Mass (kg)': err_pct = 1.0
+        elif metric == 'Body Fat (%)': err_pct = 5.0
+        else: err_pct = 1.0
+
         if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10]
+            final_pred = traj_data[metric]['preds'][-10] 
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
             proj_html = f"<div style='font-family:\"DM Mono\", monospace; font-size:0.65rem; color:var(--text-subtle); margin-top:5px; letter-spacing:0.3px;'>{end_label} PROJ: <span style='color:var(--text-main); font-weight:600;'>{lower_proj:.1f} – {upper_proj:.1f} {unit}</span></div>"
         else:
             proj_html = ""
-
+        
         st.markdown(f"""
         <div class="chart-blk">
             <div class="chart-meta">
@@ -1754,8 +1774,19 @@ elif app_view == "Trends":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-
+        
         fig = go.Figure()
+        
+        df_hist = df[~df.index.isin(recent_dfs_for_plot[metric].index)]
+        fig.add_trace(go.Scatter(
+            x=df_hist['Date'], y=df_hist[metric],
+            mode='lines+markers', name='History',
+            line=dict(color='rgba(128,128,128,0.2)', width=1.5),
+            marker=dict(size=3, color='rgba(128,128,128,0.25)'),
+            error_y=dict(type='percent', value=err_pct, color='rgba(128,128,128,0.1)', thickness=1, width=2),
+            hoverinfo='skip'
+        ))
+        
         spec_recent = recent_dfs_for_plot[metric]
         ema_col = f'{metric}_EMA'
 
@@ -1763,9 +1794,10 @@ elif app_view == "Trends":
             x=spec_recent['Date'], y=spec_recent[metric],
             mode='markers', name='Raw log',
             marker=dict(size=6, color='rgba(128,128,128,0.45)', line=dict(width=0)),
-            hovertemplate='%{x|%b %d}: %{y:.1f} {unit}<extra></extra>'.replace('{unit}', unit)
+            error_y=dict(type='percent', value=err_pct, color='rgba(128,128,128,0.3)', thickness=1.5, width=3),
+            hovertemplate='%{x|%b %d}: %{y:.1f} {unit} ±'+str(err_pct)+'%<extra></extra>'.replace('{unit}', unit)
         ))
-
+        
         if ema_col in spec_recent.columns:
             fig.add_trace(go.Scatter(
                 x=spec_recent['Date'], y=spec_recent[ema_col],
@@ -1786,7 +1818,7 @@ elif app_view == "Trends":
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
-
+            
             fig.add_trace(go.Scatter(
                 x=x_vals + x_vals[::-1],
                 y=list(y_upper) + list(y_lower)[::-1],
@@ -1794,14 +1826,14 @@ elif app_view == "Trends":
                 line=dict(color='rgba(0,0,0,0)'),
                 hoverinfo="skip", showlegend=False
             ))
-
+            
             fig.add_trace(go.Scatter(
                 x=x_vals, y=traj_data[metric]['preds'],
                 mode='lines', name='Forecast',
                 line=dict(color='#3B82F6', width=1.5, dash='dash'),
                 hoverinfo='skip'
             ))
-
+        
         epoch_date = spec_recent['Date'].min()
         fig.add_vline(x=epoch_date, line_width=1.5, line_dash="solid", line_color="rgba(128,128,128,0.4)",
                       annotation_text="START", annotation_position="bottom right",
@@ -1833,7 +1865,7 @@ elif app_view == "Trends":
 
         fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear regression'})
         st.markdown(
-            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange {fit['type']} estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}.</div>",
+            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange {fit['type']} estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}. Error bars reflect Tanita RD-953 precision (±1% mass variation, ±5% DEXA relative accuracy for body fat).</div>",
             unsafe_allow_html=True
         )
         st.markdown("</div>", unsafe_allow_html=True)
