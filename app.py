@@ -502,7 +502,7 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL
+# CSS — OVERHAUL (Custom Ruler Sliders & Grid Fixes)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F7F8FA;
@@ -516,13 +516,13 @@ css_light_vars = """
   --border: rgba(23,32,51,0.08);
   --border-strong: rgba(23,32,51,0.16);
   --c-emerald: #059669;
-  --c-emerald-bg: rgba(5, 150, 105, 0.08);
+  --c-emerald-bg: rgba(5, 150, 105, 0.1);
   --c-amber: #D97706;
-  --c-amber-bg: rgba(217, 119, 6, 0.08);
+  --c-amber-bg: rgba(217, 119, 6, 0.1);
   --c-rose: #DC2626;
-  --c-rose-bg: rgba(220, 38, 38, 0.08);
+  --c-rose-bg: rgba(220, 38, 38, 0.1);
   --c-blue: #2563EB;
-  --c-blue-bg: rgba(37, 99, 235, 0.08);
+  --c-blue-bg: rgba(37, 99, 235, 0.1);
   --c-blue-soft: rgba(37, 99, 235, 0.14);
   --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
   --shadow-md: 0 6px 18px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.05);
@@ -587,20 +587,20 @@ css = theme_block + """
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-emerald); animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.7); } }
 
-.nav-container div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
-.nav-container div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 8px 16px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
-.nav-container div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; }
+.nav-container div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
+.nav-container div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 8px 18px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+.nav-container div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; transform: translateY(-1px); }
 .nav-container div[role="radiogroup"] > label[data-checked="true"] { background: var(--nav-pill) !important; border-color: var(--nav-pill) !important; box-shadow: var(--shadow-md); }
-.nav-container div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.82rem !important; letter-spacing: 0.5px !important; }
-.nav-container div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 700 !important; }
+.nav-container div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem !important; letter-spacing: 0.5px !important; }
+.nav-container div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 800 !important; }
 .nav-container div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
 .nav-container div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 div[data-testid="stSegmentedControl"] { display: none !important; }
 
 .s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
 .settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
-.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
-.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.84rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
+.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
+.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
 /* ── Grid & cards (FORCED HORIZONTAL) ── */
 .mini-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; margin-bottom: 1.75rem; }
@@ -613,15 +613,17 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 
 .c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; } .c-blue { color: var(--c-blue) !important; }
 
-.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
+.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
 .chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
 .t-chip { font-family: 'DM Mono', monospace; font-size: 0.58rem; padding: 4px 9px; border-radius: 100px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;}
 .t-chip.c-ok  { background: var(--c-emerald-bg); color: var(--c-emerald) !important; }
 .t-chip.c-wrn { background: var(--c-amber-bg); color: var(--c-amber) !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
+.fit-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; line-height: 1.5; }
+.data-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); margin-top: -0.6rem; margin-bottom: 1rem; }
 
-.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 14px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
+.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
 .hud-icon { font-size: 1.1rem; width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
 .hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
 .hud-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
@@ -652,7 +654,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
 .del-btn button:hover { color: var(--c-rose) !important; }
 
-/* ── ALERT BANNERS ── */
+/* ── ALERT BANNERS & INPUTS ── */
 .alert-banner { padding: 10px 14px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-align: center; margin-bottom: 1rem; letter-spacing: 0.5px; }
 .alert-banner.warn { background: var(--c-amber-bg); border: 1px solid rgba(217,119,6,0.2); color: var(--c-amber); }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
@@ -663,10 +665,11 @@ div[data-testid="stSlider"] {
     padding-top: 2rem !important;
     padding-bottom: 2.5rem !important;
 }
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div:first-child {
-    display: none !important; /* Kills the native blue inner track */
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div {
+    background: transparent !important; 
+    border: none !important;
 }
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div {
     background-color: transparent !important;
     background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
     border-top: 2px solid var(--border-strong) !important;
@@ -696,30 +699,36 @@ div[data-testid="stSlider"] div[role="slider"] > div {
 
 /* ── Inputs & buttons ── */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
-div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
+div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
 div[data-testid="stSelectbox"] div[class*="singleValue"] { color: var(--input-text) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
 div[data-testid="stSelectbox"] [class*="placeholder"] { color: var(--text-muted) !important; }
-div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; }
+div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; }
 div[data-testid="stSelectbox"] [class*="option"] { color: var(--input-text) !important; background: transparent !important; }
 div[data-testid="stSelectbox"] [class*="option"]:hover { background: var(--surface-active) !important; }
 
-div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
+div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
 div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; background: transparent !important; }
 
-div[data-testid="stForm"] button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 12px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
+div[data-testid="stForm"] button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
 div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 
-.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 0.6rem 1.2rem !important; margin-top: 0 !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; box-shadow: var(--shadow-sm) !important; transition: all 0.2s ease !important; }
+.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 0.6rem 1.2rem !important; margin-top: 0 !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; box-shadow: var(--shadow-sm) !important; transition: all 0.2s ease !important; }
 .stButton > button:hover { background: var(--surface-active) !important; box-shadow: var(--shadow-md) !important; }
 
-div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; color: var(--input-text) !important; }
+div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; }
 div[data-testid="stDateInput"] input { color: var(--input-text) !important; }
 
 div[data-testid="stToggle"] label p { color: var(--text-main) !important; font-size: 0.85rem !important; }
 div[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 14px !important; overflow: hidden; }
 div[data-testid="stExpander"] summary p { color: var(--text-main) !important; font-size: 0.82rem !important; font-weight: 600 !important; }
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p { color: var(--text-main) !important; }
 
+button[aria-label="Step down"], button[aria-label="Step up"], button[title="Step down"], button[title="Step up"] { display: none !important; }
 div[data-testid="stAlert"] { border-radius: 12px !important; }
+div[data-testid="stSelectbox"] > div > div { display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; }
+div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important; }
+div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; }
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
@@ -840,6 +849,7 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
+    
     if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
@@ -897,12 +907,15 @@ if has_enough_weight_data:
             'preds': pred_y_w,
             'upper': pred_y_w + margin_of_error_w,
             'lower': pred_y_w - margin_of_error_w,
-            'final_error': margin_of_error_w[-10],
+            'final_error': margin_of_error_w[-1],
             'fit_dates': df_w['Date'].tolist(),
             'fit': fit_y_w,
         }
     else:
-        traj_data['Weight (kg)'] = {'fit_dates': df_w['Date'].tolist(), 'fit': fit_y_w}
+        traj_data['Weight (kg)'] = {
+            'fit_dates': df_w['Date'].tolist(),
+            'fit': fit_y_w,
+        }
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5).copy()
@@ -933,13 +946,13 @@ if has_enough_comp_data:
             ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
             if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0 
             else: r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
-            fit_type_c = 'point-to-point'
+            fit_type_c = 'point-to-point slope'
         else:
             slope_c = res_c.slope
             stderr_c = regression_stderr_c
             r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
             fit_y_c = res_c.intercept + slope_c * X_c_raw
-            fit_type_c = 'linear fit'
+            fit_type_c = 'linear regression'
 
         daily_slopes[m] = slope_c
         weekly_trends[m] = slope_c * 7
@@ -967,12 +980,15 @@ if has_enough_comp_data:
                 'preds': pred_y_c,
                 'upper': pred_y_c + margin_of_error_c,
                 'lower': pred_y_c - margin_of_error_c,
-                'final_error': margin_of_error_c[-10],
+                'final_error': margin_of_error_c[-1],
                 'fit_dates': df_c['Date'].tolist(),
                 'fit': fit_y_c,
             }
         else:
-            traj_data[m] = {'fit_dates': df_c['Date'].tolist(), 'fit': fit_y_c}
+            traj_data[m] = {
+                'fit_dates': df_c['Date'].tolist(),
+                'fit': fit_y_c,
+            }
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -991,7 +1007,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 10</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 11</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1055,22 +1071,27 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Completely decoupled sliders (No on_change callbacks = NO CRASHES)
-    w_val = float(last['Weight (kg)'])
-    w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
+    # Detached State Initializers (Prevents looping crashes entirely)
+    if "entry_w_slider" not in st.session_state: st.session_state.entry_w_slider = float(last['Weight (kg)'])
+    if "entry_m_slider" not in st.session_state: st.session_state.entry_m_slider = float(last['Muscle Mass (kg)'])
+    if "entry_bf_slider" not in st.session_state: st.session_state.entry_bf_slider = float(last['Body Fat (%)'])
+    if "entry_m_pct_slider" not in st.session_state: st.session_state.entry_m_pct_slider = (float(last['Muscle Mass (kg)']) / float(last['Weight (kg)'])) * 100 if float(last['Weight (kg)']) > 0 else 45.0
+
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
+    w = st.slider("Weight", min_value=max(0.0, float(last['Weight (kg)'])-5.0), max_value=float(last['Weight (kg)'])+5.0, key="entry_w_slider", step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
-        m_val = float(last['Muscle Mass (kg)'])
-        m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
+        m = st.slider("Muscle Mass", min_value=max(0.0, float(last['Muscle Mass (kg)'])-5.0), max_value=float(last['Muscle Mass (kg)'])+5.0, key="entry_m_slider", step=0.1, label_visibility="collapsed")
     else:
-        current_pct = (last['Muscle Mass (kg)'] / last['Weight (kg)']) * 100 if last['Weight (kg)'] > 0 else 45.0
-        m_pct = st.slider("Muscle Mass", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1, label_visibility="collapsed")
-        m = w * (m_pct / 100.0)
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, st.session_state.entry_m_pct_slider-5.0), max_value=min(100.0, st.session_state.entry_m_pct_slider+5.0), key="entry_m_pct_slider", step=0.1, label_visibility="collapsed")
+        m = st.session_state.entry_w_slider * (st.session_state.entry_m_pct_slider / 100.0)
         st.markdown(f"<div class='data-note' style='text-align:center; margin-top:-25px; margin-bottom:15px; font-weight:600;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
 
-    bf_val = float(last['Body Fat (%)'])
-    bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
+    bf = st.slider("Body Fat", min_value=max(3.0, float(last['Body Fat (%)'])-5.0), max_value=float(last['Body Fat (%)'])+5.0, key="entry_bf_slider", step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
@@ -1078,6 +1099,13 @@ if app_view == "Entry":
             append_body_entry(st.session_state['sheet_url'], now_str, w, m, bf)
             st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
+            
+            # Wipe slider state so next load resets to the newly saved values
+            if "entry_w_slider" in st.session_state: del st.session_state["entry_w_slider"]
+            if "entry_m_slider" in st.session_state: del st.session_state["entry_m_slider"]
+            if "entry_bf_slider" in st.session_state: del st.session_state["entry_bf_slider"]
+            if "entry_m_pct_slider" in st.session_state: del st.session_state["entry_m_pct_slider"]
+
             if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             system_alert("Saved")
             st.rerun()
@@ -1202,8 +1230,8 @@ elif app_view == "Trends":
         elif metric == 'Body Fat (%)': err_pct = 5.0
         else: err_pct = 1.0
 
-        if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10] 
+        if 'preds' in traj_data.get(metric, {}) and len(traj_data[metric]['preds']) > 0:
+            final_pred = traj_data[metric]['preds'][-1] 
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
@@ -1269,7 +1297,7 @@ elif app_view == "Trends":
                 hovertemplate='Fit: %{y:.1f} {unit}<extra></extra>'.replace('{unit}', unit)
             ))
 
-        if 'dates' in traj_data.get(metric, {}):
+        if 'dates' in traj_data.get(metric, {}) and len(traj_data[metric]['dates']) > 0:
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
@@ -1524,11 +1552,11 @@ elif app_view == "Data":
             column_config={
                 'Date': st.column_config.TextColumn('Date', width='medium'),
                 'Weight (kg)': st.column_config.NumberColumn('Weight', format='%.1f kg'),
-                'Weight Δ': st.column_config.NumberColumn('Δ Weight', format='%+.1f'),
+                'Weight Δ': st.column_config.NumberColumn('Δ Weight', format='%.1f'),
                 'Muscle Mass (kg)': st.column_config.NumberColumn('Muscle', format='%.1f kg'),
-                'Muscle Δ': st.column_config.NumberColumn('Δ Muscle', format='%+.1f'),
+                'Muscle Δ': st.column_config.NumberColumn('Δ Muscle', format='%.1f'),
                 'Body Fat (%)': st.column_config.NumberColumn('Fat', format='%.1f%%'),
-                'Fat Δ': st.column_config.NumberColumn('Δ Fat', format='%+.1f'),
+                'Fat Δ': st.column_config.NumberColumn('Δ Fat', format='%.1f'),
             }
         )
         st.markdown("<div class='data-note'>Deletion is limited to records from the last 7 days so older history stays protected.</div>", unsafe_allow_html=True)
