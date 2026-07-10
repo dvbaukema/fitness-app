@@ -129,6 +129,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     err_right = min(100, pct + err_pct_width)
     actual_err_width = err_right - err_left
     
+    # Highly visible horizontal error bar
     err_html = f"<div style='position:absolute; top:4px; bottom:4px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.85; z-index:4; border-radius:2px;'></div>"
 
     html_block = f"""
@@ -339,7 +340,8 @@ def overwrite_body_sheet(sheet_url, df):
 def ensure_sheet_tab(sheet_url, tab_name):
     service = get_google_sheets_service()
     sheet_id = extract_sheet_id(sheet_url)
-    if not service or not sheet_id: return False
+    if not service or not sheet_id:
+        return False
     try:
         meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         titles = [s.get('properties', {}).get('title') for s in meta.get('sheets', [])]
@@ -499,7 +501,7 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL
+# CSS — OVERHAUL (Custom Ruler Sliders & Grid Fixes)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F7F8FA;
@@ -667,8 +669,41 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* Clean Sliders */
-div[data-testid="stSlider"] label p { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; margin-bottom: -10px !important;}
+/* Custom Ruler Sliders */
+div[data-testid="stSlider"] {
+    padding-top: 2.5rem !important;
+    padding-bottom: 1.5rem !important;
+}
+div[data-testid="stSlider"] > div > div > div {
+    height: 34px !important;
+    background: transparent !important;
+    background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
+    border-radius: 0 !important;
+    border-top: 1px solid var(--border-strong);
+}
+div[data-testid="stSlider"] > div > div > div > div:first-child { background: transparent !important; }
+div[data-testid="stSlider"] div[role="slider"] {
+    width: 3px !important;
+    height: 44px !important;
+    background: #FACC15 !important;
+    border: none !important;
+    border-radius: 2px !important;
+    box-shadow: 0 0 10px rgba(250, 204, 21, 0.4) !important;
+    transform: translateY(-5px) !important;
+}
+div[data-testid="stSlider"] div[role="slider"]:focus {
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.8) !important;
+    outline: none !important;
+}
+div[data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] > div {
+    font-size: 2.2rem !important;
+    font-weight: 800 !important;
+    color: var(--text-main) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: transparent !important;
+    padding: 0 !important;
+    transform: translateY(-38px);
+}
 
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
@@ -705,6 +740,7 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !i
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
+/* Keep grid horizontal on mobile */
 @media (max-width: 760px) { 
   .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } 
   .mini-val { font-size: 1.25rem; } 
@@ -819,7 +855,6 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
-    
     if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
@@ -838,13 +873,13 @@ if has_enough_weight_data:
         if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 # Force mathematically accurate R2 for microvariance
         else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
-        fit_type_w = 'point-to-point'
+        fit_type_w = 'point-to-point slope'
     else:
         slope_w = res_w.slope
         stderr_w = regression_stderr_w
         r2_w = 0 if pd.isna(res_w.rvalue) else res_w.rvalue ** 2
         fit_y_w = res_w.intercept + slope_w * X_w_raw
-        fit_type_w = 'linear fit'
+        fit_type_w = 'linear regression'
 
     daily_slopes['Weight (kg)'] = slope_w
     weekly_trends['Weight (kg)'] = slope_w * 7
@@ -882,10 +917,7 @@ if has_enough_weight_data:
             'fit': fit_y_w,
         }
     else:
-        traj_data['Weight (kg)'] = {
-            'fit_dates': df_w['Date'].tolist(),
-            'fit': fit_y_w,
-        }
+        traj_data['Weight (kg)'] = {'fit_dates': df_w['Date'].tolist(), 'fit': fit_y_w}
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5).copy()
@@ -977,7 +1009,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 9</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 10</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1038,24 +1070,29 @@ if app_view == "Entry":
             <div class="mini-sub {dclass(delta_bf, invert=True)}">{sgn(delta_bf)}{delta_bf:.1f}%</div>
         </div>
     </div>
-    <div class="s-head">New Entry</div>
+    <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
+    # Completely decoupled sliders styled as Apple Health Rulers
     w_val = float(last['Weight (kg)'])
-    w = st.slider("Weight (kg)", min_value=max(0.0, w_val-2.5), max_value=w_val+2.5, value=w_val, step=0.1)
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
+    w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         m_val = float(last['Muscle Mass (kg)'])
-        m = st.slider("Muscle Mass (kg)", min_value=max(0.0, m_val-2.5), max_value=m_val+2.5, value=m_val, step=0.1)
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
+        m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
     else:
         current_pct = (last['Muscle Mass (kg)'] / last['Weight (kg)']) * 100 if last['Weight (kg)'] > 0 else 45.0
-        m_pct = st.slider("Muscle Mass (%)", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1)
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1, label_visibility="collapsed")
         m = w * (m_pct / 100.0)
-        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:2px; margin-bottom:15px;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='data-note' style='text-align:center; margin-top:-10px; margin-bottom:15px; font-weight:600;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
 
     bf_val = float(last['Body Fat (%)'])
-    bf = st.slider("Body Fat (%)", min_value=max(3.0, bf_val-2.5), max_value=bf_val+2.5, value=bf_val, step=0.1)
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
+    bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
