@@ -129,7 +129,6 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     err_right = min(100, pct + err_pct_width)
     actual_err_width = err_right - err_left
     
-    # Highly visible horizontal error bar
     err_html = f"<div style='position:absolute; top:4px; bottom:4px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.85; z-index:4; border-radius:2px;'></div>"
 
     html_block = f"""
@@ -503,19 +502,19 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — CLEAN DESIGN, WORKING SLIDERS WITH VISIBLE VALUES
+# CSS — OVERHAUL
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
-  --bg-primary: #F8FAFC;
-  --bg-secondary: #F1F5F9;
-  --text-main: #0F172A;
-  --text-muted: #475569;
-  --text-subtle: #94A3B8;
+  --bg-primary: #F7F8FA;
+  --bg-secondary: #EEF2F6;
+  --text-main: #172033;
+  --text-muted: #617087;
+  --text-subtle: #98A2B3;
   --surface: #FFFFFF;
-  --surface-hover: #F8FAFC;
-  --surface-active: #F1F5F9;
-  --border: rgba(15,23,42,0.06);
-  --border-strong: rgba(15,23,42,0.12);
+  --surface-hover: #F3F6FA;
+  --surface-active: #EAF0F7;
+  --border: rgba(23,32,51,0.08);
+  --border-strong: rgba(23,32,51,0.16);
   --c-emerald: #059669;
   --c-emerald-bg: rgba(5, 150, 105, 0.08);
   --c-amber: #D97706;
@@ -524,21 +523,21 @@ css_light_vars = """
   --c-rose-bg: rgba(220, 38, 38, 0.08);
   --c-blue: #2563EB;
   --c-blue-bg: rgba(37, 99, 235, 0.08);
-  --c-blue-soft: rgba(37, 99, 235, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05);
-  --nav-bg: rgba(248, 250, 252, 0.9);
-  --nav-pill: #0F172A;
+  --c-blue-soft: rgba(37, 99, 235, 0.14);
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md: 0 6px 18px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.05);
+  --shadow-lg: 0 18px 44px rgba(15,23,42,0.12), 0 8px 16px rgba(15,23,42,0.06);
+  --nav-bg: rgba(247, 248, 250, 0.9);
+  --nav-pill: #172033;
   --nav-pill-text: #FFFFFF;
-  --nav-text: #475569;
+  --nav-text: #617087;
   --input-bg: #FFFFFF;
-  --input-text: #0F172A;
+  --input-text: #172033;
 """
 
 css_dark_vars = """
-  --bg-primary: #0B0F19;
-  --bg-secondary: #131A2A;
+  --bg-primary: #0F0F0F;
+  --bg-secondary: #181818;
   --text-main: #E2E8F0;
   --text-muted: #94A3B8;
   --text-subtle: #475569;
@@ -603,8 +602,8 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
 .quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.84rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
-/* ── Grid & cards ── */
-.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.75rem; }
+/* ── Grid & cards (FORCED HORIZONTAL) ── */
+.mini-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; margin-bottom: 1.75rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
 .mini-cell:hover { box-shadow: var(--shadow-md); }
 .mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
@@ -622,7 +621,6 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
 
-/* ── Hud & trajectory ── */
 .hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 14px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
 .hud-icon { font-size: 1.1rem; width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
 .hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
@@ -654,47 +652,46 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
 .del-btn button:hover { color: var(--c-rose) !important; }
 
-/* ── ALERT BANNERS & INPUTS ── */
+/* ── ALERT BANNERS ── */
 .alert-banner { padding: 10px 14px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-align: center; margin-bottom: 1rem; letter-spacing: 0.5px; }
 .alert-banner.warn { background: var(--c-amber-bg); border: 1px solid rgba(217,119,6,0.2); color: var(--c-amber); }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* ── SLIDER FIX: clean native look ── */
+/* ── FIX: CLEAN RULER SLIDERS (NO DOUBLE BAR) ── */
 div[data-testid="stSlider"] {
-    padding-top: 0.8rem !important;
-    padding-bottom: 0.5rem !important;
+    padding-top: 2rem !important;
+    padding-bottom: 2.5rem !important;
 }
-div[data-testid="stSlider"] > div > div > div {
-    height: 6px !important;
-    background: var(--border) !important;
-    border-radius: 3px !important;
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div:first-child {
+    display: none !important; /* Kills the native blue inner track */
 }
-div[data-testid="stSlider"] > div > div > div > div:first-child {
-    background: var(--c-blue) !important;
-    height: 6px !important;
-    border-radius: 3px !important;
-}
-/* Keep the default thumb label visible and style it */
-div[data-testid="stSlider"] div[role="slider"] div {
-    font-size: 0.8rem !important;
-    font-weight: 700 !important;
-    color: var(--text-main) !important;
-    background: var(--surface) !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    border: 1px solid var(--border-strong) !important;
-    box-shadow: var(--shadow-sm) !important;
-    transform: translateY(-32px);
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
+    background-color: transparent !important;
+    background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
+    border-top: 2px solid var(--border-strong) !important;
+    border-radius: 0 !important;
+    height: 12px !important;
 }
 div[data-testid="stSlider"] div[role="slider"] {
-    background: var(--c-blue) !important;
-    border: 2px solid white !important;
-    width: 18px !important;
-    height: 18px !important;
-    border-radius: 50% !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
-    margin-top: -6px;
+    width: 4px !important;
+    height: 40px !important;
+    background: #FACC15 !important;
+    border: none !important;
+    border-radius: 2px !important;
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.6) !important;
+    transform: translateY(-14px) !important;
+}
+div[data-testid="stSlider"] div[role="slider"] > div {
+    font-size: 2.5rem !important;
+    font-weight: 800 !important;
+    color: var(--text-main) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    transform: translateY(-44px) !important;
 }
 
 /* ── Inputs & buttons ── */
@@ -727,9 +724,11 @@ div[data-testid="stAlert"] { border-radius: 12px !important; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
+/* Keep grid absolutely horizontal on mobile */
 @media (max-width: 760px) { 
   .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } 
-  .mini-val { font-size: 1.25rem; } 
+  .mini-val { font-size: 1.25rem !important; } 
+  .mini-grid { grid-template-columns: repeat(3, 1fr) !important; } 
   .chart-meta { flex-direction: column; gap: 12px; } 
   .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } 
   .app-bar { align-items: flex-start; gap: 12px; } 
@@ -841,7 +840,6 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
-    
     if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
@@ -857,7 +855,7 @@ if has_enough_weight_data:
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
         ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
-        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 # Force mathematically accurate R2 for microvariance
+        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 
         else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
         fit_type_w = 'point-to-point slope'
@@ -935,13 +933,13 @@ if has_enough_comp_data:
             ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
             if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0 
             else: r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
-            fit_type_c = 'point-to-point slope'
+            fit_type_c = 'point-to-point'
         else:
             slope_c = res_c.slope
             stderr_c = regression_stderr_c
             r2_c = 0 if pd.isna(res_c.rvalue) else res_c.rvalue ** 2
             fit_y_c = res_c.intercept + slope_c * X_c_raw
-            fit_type_c = 'linear regression'
+            fit_type_c = 'linear fit'
 
         daily_slopes[m] = slope_c
         weekly_trends[m] = slope_c * 7
@@ -974,10 +972,7 @@ if has_enough_comp_data:
                 'fit': fit_y_c,
             }
         else:
-            traj_data[m] = {
-                'fit_dates': df_c['Date'].tolist(),
-                'fit': fit_y_c,
-            }
+            traj_data[m] = {'fit_dates': df_c['Date'].tolist(), 'fit': fit_y_c}
 
 # ══════════════════════════════════════════════════════════════
 # MAIN ROUTING ENGINE
@@ -996,7 +991,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 9</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 10</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1057,27 +1052,24 @@ if app_view == "Entry":
             <div class="mini-sub {dclass(delta_bf, invert=True)}">{sgn(delta_bf)}{delta_bf:.1f}%</div>
         </div>
     </div>
-    <div class="s-head">New Entry</div>
+    <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
+    # Completely decoupled sliders (No on_change callbacks = NO CRASHES)
     w_val = float(last['Weight (kg)'])
-    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
     w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         m_val = float(last['Muscle Mass (kg)'])
-        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
         m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
     else:
         current_pct = (last['Muscle Mass (kg)'] / last['Weight (kg)']) * 100 if last['Weight (kg)'] > 0 else 45.0
-        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
         m_pct = st.slider("Muscle Mass", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1, label_visibility="collapsed")
         m = w * (m_pct / 100.0)
-        st.markdown(f"<div class='data-note' style='text-align:center; margin-top:-10px; margin-bottom:15px; font-weight:600;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='data-note' style='text-align:center; margin-top:-25px; margin-bottom:15px; font-weight:600;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
 
     bf_val = float(last['Body Fat (%)'])
-    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
     bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
@@ -1321,7 +1313,7 @@ elif app_view == "Trends":
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear regression'})
+        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear fit'})
         st.markdown(
             f"""<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px;">
                 <div style="font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); line-height: 1.4;">
