@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Beta",
+    page_title="METRICS | Stable",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -102,7 +102,7 @@ def hud_card(kind, icon, title, desc):
       </div>
     </div>"""
 
-def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_rate=0):
+def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None):
     tgt_rate = profile[metric][0]
     s = sgn(actual_rate); ts = sgn(tgt_rate)
     c_txt, c_bg, status, hex_col = eval_metric(metric, actual_rate, profile, mmt, bft)
@@ -124,13 +124,6 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     pct = max(min(pct, 97), 3)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    err_pct_width = (err_rate / (2 * max_bound)) * 100 if max_bound > 0 else 0
-    err_left = max(0, pct - err_pct_width)
-    err_right = min(100, pct + err_pct_width)
-    actual_err_width = err_right - err_left
-    
-    err_html = f"<div style='position:absolute; top:4px; bottom:4px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.85; z-index:4; border-radius:2px;'></div>"
-
     html_block = f"""
     <div class='tj-blk'>
       <div class='tj-row' style='margin-bottom:10px;'>
@@ -141,10 +134,7 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
           </div>
         </div>
       </div>
-      <div class='bar-tk' style='background: {bg_grad};'>
-        {err_html}
-        <div class='bar-pin' style='left: {pct}%;'></div>
-      </div>
+      <div class='bar-tk' style='background: {bg_grad};'><div class='bar-pin' style='left: {pct}%;'></div></div>
       {bounds_html}
       <div class='tj-st {c_txt}'>{status}</div>
     </div>"""
@@ -544,26 +534,26 @@ css_dark_vars = """
   --surface: #1A2332;
   --surface-hover: #1E293B;
   --surface-active: #243044;
-  --border: rgba(148,163,184,0.08);
-  --border-strong: rgba(148,163,184,0.16);
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.14);
   --c-emerald: #10B981;
-  --c-emerald-bg: rgba(16, 185, 129, 0.1);
+  --c-emerald-bg: rgba(16, 185, 129, 0.12);
   --c-amber: #F59E0B;
-  --c-amber-bg: rgba(245, 158, 11, 0.1);
+  --c-amber-bg: rgba(245, 158, 11, 0.12);
   --c-rose: #F87171;
-  --c-rose-bg: rgba(248, 113, 113, 0.1);
+  --c-rose-bg: rgba(248, 113, 113, 0.12);
   --c-blue: #60A5FA;
-  --c-blue-bg: rgba(96, 165, 250, 0.1);
-  --c-blue-soft: rgba(96, 165, 250, 0.15);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
-  --nav-bg: rgba(11, 15, 25, 0.88);
-  --nav-pill: #E2E8F0;
-  --nav-pill-text: #0B0F19;
-  --nav-text: #94A3B8;
-  --input-bg: #1A2332;
-  --input-text: #E2E8F0;
+  --c-blue-bg: rgba(96, 165, 250, 0.12);
+  --c-blue-soft: rgba(96, 165, 250, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+  --nav-bg: rgba(15, 15, 15, 0.88);
+  --nav-pill: #F0EDE8;
+  --nav-pill-text: #0F0F0F;
+  --nav-text: rgba(240,237,232,0.5);
+  --input-bg: #1C1C1C;
+  --input-text: #F0EDE8;
 """
 
 if st.session_state['theme_pref'] == "Dark": theme_block = f":root {{{css_dark_vars}}}"
@@ -849,7 +839,6 @@ if has_enough_weight_data:
     recent_dfs_for_plot['Weight (kg)'] = df_w
 
     X_w_raw = elapsed_days(df_w['Date'])
-    
     if 'Weight (kg)_EMA' not in df_w.columns: df_w['Weight (kg)_EMA'] = df_w['Weight (kg)'].ewm(alpha=0.15, adjust=False).mean()
         
     y_w = df_w['Weight (kg)_EMA'].values
@@ -865,7 +854,7 @@ if has_enough_weight_data:
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
         ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
-        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 
+        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 # Force mathematically accurate R2 for microvariance
         else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
         fit_type_w = 'point-to-point slope'
@@ -1071,27 +1060,26 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Detached State Initializers (Prevents looping crashes entirely)
-    if "entry_w_slider" not in st.session_state: st.session_state.entry_w_slider = float(last['Weight (kg)'])
-    if "entry_m_slider" not in st.session_state: st.session_state.entry_m_slider = float(last['Muscle Mass (kg)'])
-    if "entry_bf_slider" not in st.session_state: st.session_state.entry_bf_slider = float(last['Body Fat (%)'])
-    if "entry_m_pct_slider" not in st.session_state: st.session_state.entry_m_pct_slider = (float(last['Muscle Mass (kg)']) / float(last['Weight (kg)'])) * 100 if float(last['Weight (kg)']) > 0 else 45.0
-
+    # Completely decoupled sliders (No on_change callbacks = NO CRASHES)
+    w_val = float(last['Weight (kg)'])
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
-    w = st.slider("Weight", min_value=max(0.0, float(last['Weight (kg)'])-5.0), max_value=float(last['Weight (kg)'])+5.0, key="entry_w_slider", step=0.1, label_visibility="collapsed")
+    w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
+        m_val = float(last['Muscle Mass (kg)'])
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
-        m = st.slider("Muscle Mass", min_value=max(0.0, float(last['Muscle Mass (kg)'])-5.0), max_value=float(last['Muscle Mass (kg)'])+5.0, key="entry_m_slider", step=0.1, label_visibility="collapsed")
+        m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
     else:
+        current_pct = (float(last['Muscle Mass (kg)']) / float(last['Weight (kg)'])) * 100 if float(last['Weight (kg)']) > 0 else 45.0
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
-        m_pct = st.slider("Muscle Mass", min_value=max(0.0, st.session_state.entry_m_pct_slider-5.0), max_value=min(100.0, st.session_state.entry_m_pct_slider+5.0), key="entry_m_pct_slider", step=0.1, label_visibility="collapsed")
-        m = st.session_state.entry_w_slider * (st.session_state.entry_m_pct_slider / 100.0)
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, current_pct-5.0), max_value=min(100.0, current_pct+5.0), value=current_pct, step=0.1, label_visibility="collapsed")
+        m = w * (m_pct / 100.0)
         st.markdown(f"<div class='data-note' style='text-align:center; margin-top:-25px; margin-bottom:15px; font-weight:600;'>Calculated: {m:.1f} kg</div>", unsafe_allow_html=True)
 
+    bf_val = float(last['Body Fat (%)'])
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
-    bf = st.slider("Body Fat", min_value=max(3.0, float(last['Body Fat (%)'])-5.0), max_value=float(last['Body Fat (%)'])+5.0, key="entry_bf_slider", step=0.1, label_visibility="collapsed")
+    bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
@@ -1099,13 +1087,6 @@ if app_view == "Entry":
             append_body_entry(st.session_state['sheet_url'], now_str, w, m, bf)
             st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
-            
-            # Wipe slider state so next load resets to the newly saved values
-            if "entry_w_slider" in st.session_state: del st.session_state["entry_w_slider"]
-            if "entry_m_slider" in st.session_state: del st.session_state["entry_m_slider"]
-            if "entry_bf_slider" in st.session_state: del st.session_state["entry_bf_slider"]
-            if "entry_m_pct_slider" in st.session_state: del st.session_state["entry_m_pct_slider"]
-
             if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             system_alert("Saved")
             st.rerun()
@@ -1377,10 +1358,6 @@ elif app_view == "Analysis":
     mmt_month = monthly_trends.get('Muscle Mass (kg)', 0)
     bft_month = monthly_trends.get('Body Fat (%)', 0)
 
-    wt_err = trend_stats.get('Weight (kg)', {}).get('stderr', 0) * 7
-    mmt_err = trend_stats.get('Muscle Mass (kg)', {}).get('stderr', 0) * 7
-    bft_err = trend_stats.get('Body Fat (%)', {}).get('stderr', 0) * 7
-
     c_w, _, _, _ = eval_metric('Weight (kg)', wt, ideal_weekly_rates, mmt, bft)
 
     if has_enough_comp_data:
@@ -1414,11 +1391,11 @@ elif app_view == "Analysis":
     <div class="s-head">Trajectory Logic</div>
     """, unsafe_allow_html=True)
 
-    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_weekly_rates, "kg/wk", mmt, bft, wt_err), unsafe_allow_html=True)
+    st.markdown(traj_bar("BODY WEIGHT", wt, 'Weight (kg)', ideal_weekly_rates, "kg/wk", mmt, bft), unsafe_allow_html=True)
     if has_enough_comp_data:
         st.markdown(
-            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_weekly_rates, "kg/wk", mmt, bft, mmt_err) +
-            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_weekly_rates, "%/wk", mmt, bft, bft_err),
+            traj_bar("MUSCLE MASS", mmt, 'Muscle Mass (kg)', ideal_weekly_rates, "kg/wk", mmt, bft) +
+            traj_bar("BODY FAT", bft, 'Body Fat (%)', ideal_weekly_rates, "%/wk", mmt, bft),
             unsafe_allow_html=True
         )
 
