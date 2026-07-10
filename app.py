@@ -492,68 +492,68 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL (Custom Ruler Sliders & Grid Fixes)
+# CSS — CLEAN, NO RULER MARKS, VISIBLE SLIDER VALUES
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
-  --bg-primary: #F7F8FA;
-  --bg-secondary: #EEF2F6;
-  --text-main: #172033;
-  --text-muted: #617087;
-  --text-subtle: #98A2B3;
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #F1F5F9;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --text-subtle: #94A3B8;
   --surface: #FFFFFF;
-  --surface-hover: #F3F6FA;
-  --surface-active: #EAF0F7;
-  --border: rgba(23,32,51,0.08);
-  --border-strong: rgba(23,32,51,0.16);
+  --surface-hover: #F8FAFC;
+  --surface-active: #F1F5F9;
+  --border: rgba(15,23,42,0.06);
+  --border-strong: rgba(15,23,42,0.12);
   --c-emerald: #059669;
-  --c-emerald-bg: rgba(5, 150, 105, 0.1);
+  --c-emerald-bg: rgba(5, 150, 105, 0.08);
   --c-amber: #D97706;
-  --c-amber-bg: rgba(217, 119, 6, 0.1);
+  --c-amber-bg: rgba(217, 119, 6, 0.08);
   --c-rose: #DC2626;
-  --c-rose-bg: rgba(220, 38, 38, 0.1);
+  --c-rose-bg: rgba(220, 38, 38, 0.08);
   --c-blue: #2563EB;
-  --c-blue-bg: rgba(37, 99, 235, 0.1);
-  --c-blue-soft: rgba(37, 99, 235, 0.14);
-  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
-  --shadow-md: 0 6px 18px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.05);
-  --shadow-lg: 0 18px 44px rgba(15,23,42,0.12), 0 8px 16px rgba(15,23,42,0.06);
-  --nav-bg: rgba(247, 248, 250, 0.9);
-  --nav-pill: #172033;
+  --c-blue-bg: rgba(37, 99, 235, 0.08);
+  --c-blue-soft: rgba(37, 99, 235, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05);
+  --nav-bg: rgba(248, 250, 252, 0.9);
+  --nav-pill: #0F172A;
   --nav-pill-text: #FFFFFF;
-  --nav-text: #617087;
+  --nav-text: #475569;
   --input-bg: #FFFFFF;
-  --input-text: #172033;
+  --input-text: #0F172A;
 """
 
 css_dark_vars = """
-  --bg-primary: #0F0F0F;
-  --bg-secondary: #181818;
+  --bg-primary: #0B0F19;
+  --bg-secondary: #131A2A;
   --text-main: #E2E8F0;
   --text-muted: #94A3B8;
   --text-subtle: #475569;
   --surface: #1A2332;
   --surface-hover: #1E293B;
   --surface-active: #243044;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.14);
+  --border: rgba(148,163,184,0.08);
+  --border-strong: rgba(148,163,184,0.16);
   --c-emerald: #10B981;
-  --c-emerald-bg: rgba(16, 185, 129, 0.12);
+  --c-emerald-bg: rgba(16, 185, 129, 0.1);
   --c-amber: #F59E0B;
-  --c-amber-bg: rgba(245, 158, 11, 0.12);
+  --c-amber-bg: rgba(245, 158, 11, 0.1);
   --c-rose: #F87171;
-  --c-rose-bg: rgba(248, 113, 113, 0.12);
+  --c-rose-bg: rgba(248, 113, 113, 0.1);
   --c-blue: #60A5FA;
-  --c-blue-bg: rgba(96, 165, 250, 0.12);
-  --c-blue-soft: rgba(96, 165, 250, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
-  --nav-bg: rgba(15, 15, 15, 0.88);
-  --nav-pill: #F0EDE8;
-  --nav-pill-text: #0F0F0F;
-  --nav-text: rgba(240,237,232,0.5);
-  --input-bg: #1C1C1C;
-  --input-text: #F0EDE8;
+  --c-blue-bg: rgba(96, 165, 250, 0.1);
+  --c-blue-soft: rgba(96, 165, 250, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  --nav-bg: rgba(11, 15, 25, 0.88);
+  --nav-pill: #E2E8F0;
+  --nav-pill-text: #0B0F19;
+  --nav-text: #94A3B8;
+  --input-bg: #1A2332;
+  --input-text: #E2E8F0;
 """
 
 if st.session_state['theme_pref'] == "Dark": theme_block = f":root {{{css_dark_vars}}}"
@@ -577,23 +577,23 @@ css = theme_block + """
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-emerald); animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.7); } }
 
-.nav-container div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
-.nav-container div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 8px 18px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
-.nav-container div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; transform: translateY(-1px); }
+.nav-container div[role="radiogroup"] { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 2.5rem; margin-top: -0.5rem; background: transparent !important; }
+.nav-container div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 8px 16px !important; margin: 0 !important; cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+.nav-container div[role="radiogroup"] > label:hover { border-color: var(--text-muted) !important; }
 .nav-container div[role="radiogroup"] > label[data-checked="true"] { background: var(--nav-pill) !important; border-color: var(--nav-pill) !important; box-shadow: var(--shadow-md); }
-.nav-container div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem !important; letter-spacing: 0.5px !important; }
-.nav-container div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 800 !important; }
+.nav-container div[role="radiogroup"] > label div { color: var(--text-muted) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.82rem !important; letter-spacing: 0.5px !important; }
+.nav-container div[role="radiogroup"] > label[data-checked="true"] div { color: var(--nav-pill-text) !important; font-weight: 700 !important; }
 .nav-container div[role="radiogroup"] span[data-baseweb="radio"] { display: none !important; }
 .nav-container div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { margin: 0 !important; padding: 0 !important; }
 div[data-testid="stSegmentedControl"] { display: none !important; }
 
 .s-head { font-family: 'DM Mono', monospace !important; font-size: 0.65rem; letter-spacing: 2.5px; color: var(--text-subtle); margin: 2rem 0 1rem; font-weight: 500; text-transform: uppercase; }
 .settings-lbl { font-family: 'DM Sans', sans-serif !important; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; margin-top: 2rem; margin-bottom: 1rem; letter-spacing: 1px;}
-.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
-.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
+.quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
+.quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.84rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
-/* ── Grid & cards (FORCED HORIZONTAL) ── */
-.mini-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; margin-bottom: 1.75rem; }
+/* ── Grid & cards ── */
+.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.75rem; }
 .mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
 .mini-cell:hover { box-shadow: var(--shadow-md); }
 .mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
@@ -603,17 +603,16 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 
 .c-ok  { color: var(--c-emerald) !important; } .c-wrn { color: var(--c-amber) !important; } .c-err { color: var(--c-rose) !important; } .c-neu { color: var(--text-muted) !important; } .c-blue { color: var(--c-blue) !important; }
 
-.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
+.chart-blk { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); }
 .chart-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
 .t-chip { font-family: 'DM Mono', monospace; font-size: 0.58rem; padding: 4px 9px; border-radius: 100px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;}
 .t-chip.c-ok  { background: var(--c-emerald-bg); color: var(--c-emerald) !important; }
 .t-chip.c-wrn { background: var(--c-amber-bg); color: var(--c-amber) !important; }
 .t-chip.c-err { background: var(--c-rose-bg); color: var(--c-rose) !important; }
 .t-chip.c-neu { background: var(--surface-active); color: var(--text-muted) !important; }
-.fit-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; line-height: 1.5; }
-.data-note { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); margin-top: -0.6rem; margin-bottom: 1rem; }
 
-.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 16px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
+/* ── Hud & trajectory ── */
+.hud-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.1rem; border-radius: 14px; margin-bottom: 0.6rem; box-shadow: var(--shadow-sm); }
 .hud-icon { font-size: 1.1rem; width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface-active); flex-shrink: 0; line-height: 1; }
 .hud-title { font-size: 0.78rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
 .hud-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
@@ -650,87 +649,77 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* ── FIX: CLEAN RULER SLIDERS (NO DOUBLE BAR) ── */
+/* ── SLIDER FIX: visible numbers, single clean track ── */
 div[data-testid="stSlider"] {
-    padding-top: 2rem !important;
-    padding-bottom: 2.5rem !important;
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.5rem !important;
 }
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div {
-    background: transparent !important; 
-    border: none !important;
+div[data-testid="stSlider"] > div > div > div {
+    height: 6px !important;
+    background: var(--border) !important;
+    border-radius: 3px !important;
 }
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div {
-    background-color: transparent !important;
-    background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
-    border-top: 2px solid var(--border-strong) !important;
-    border-radius: 0 !important;
-    height: 12px !important;
+div[data-testid="stSlider"] > div > div > div > div:first-child {
+    background: var(--c-blue) !important;
+    height: 6px !important;
+    border-radius: 3px !important;
+}
+/* Keep the native thumb label visible */
+div[data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] > div {
+    display: block !important;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    background: var(--surface) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: var(--shadow-sm) !important;
 }
 div[data-testid="stSlider"] div[role="slider"] {
-    width: 4px !important;
-    height: 40px !important;
-    background: #FACC15 !important;
-    border: none !important;
-    border-radius: 2px !important;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.6) !important;
-    transform: translateY(-14px) !important;
-}
-div[data-testid="stSlider"] div[role="slider"] > div {
-    font-size: 2.5rem !important;
-    font-weight: 800 !important;
-    color: var(--text-main) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    transform: translateY(-44px) !important;
+    background: var(--c-blue) !important;
+    border: 2px solid white !important;
+    width: 18px !important;
+    height: 18px !important;
+    border-radius: 50% !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+    margin-top: -6px;
 }
 
 /* ── Inputs & buttons ── */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
-div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
+div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
 div[data-testid="stSelectbox"] div[class*="singleValue"] { color: var(--input-text) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
 div[data-testid="stSelectbox"] [class*="placeholder"] { color: var(--text-muted) !important; }
-div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; }
+div[data-testid="stSelectbox"] [class*="menu"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; }
 div[data-testid="stSelectbox"] [class*="option"] { color: var(--input-text) !important; background: transparent !important; }
 div[data-testid="stSelectbox"] [class*="option"]:hover { background: var(--surface-active) !important; }
 
-div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
+div[data-testid="stTextInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; min-height: 3.2rem !important; }
 div[data-testid="stTextInput"] input { color: var(--input-text) !important; font-family: 'DM Mono', monospace !important; font-size: 1rem !important; text-align: center !important; background: transparent !important; }
 
-div[data-testid="stForm"] button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 100px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
+div[data-testid="stForm"] button { background: var(--text-main) !important; color: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: none !important; border-radius: 12px !important; padding: 1rem !important; margin-top: 1.5rem !important; text-transform: uppercase !important; letter-spacing: 2px !important; box-shadow: var(--shadow-md) !important; transition: all 0.2s ease !important; }
 div[data-testid="stForm"] button:hover { transform: translateY(-1px) !important; box-shadow: var(--shadow-lg) !important; }
 
-.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: 1px solid var(--border-strong) !important; border-radius: 100px !important; padding: 0.6rem 1.2rem !important; margin-top: 0 !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; box-shadow: var(--shadow-sm) !important; transition: all 0.2s ease !important; }
+.stButton > button { background: var(--surface) !important; color: var(--text-main) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 700 !important; font-size: 0.82rem !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 0.6rem 1.2rem !important; margin-top: 0 !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; box-shadow: var(--shadow-sm) !important; transition: all 0.2s ease !important; }
 .stButton > button:hover { background: var(--surface-active) !important; box-shadow: var(--shadow-md) !important; }
 
-div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; }
+div[data-testid="stDateInput"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; color: var(--input-text) !important; }
 div[data-testid="stDateInput"] input { color: var(--input-text) !important; }
 
 div[data-testid="stToggle"] label p { color: var(--text-main) !important; font-size: 0.85rem !important; }
 div[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 14px !important; overflow: hidden; }
 div[data-testid="stExpander"] summary p { color: var(--text-main) !important; font-size: 0.82rem !important; font-weight: 600 !important; }
-div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] p { color: var(--text-main) !important; }
 
-button[aria-label="Step down"], button[aria-label="Step up"], button[title="Step down"], button[title="Step up"] { display: none !important; }
 div[data-testid="stAlert"] { border-radius: 12px !important; }
-div[data-testid="stSelectbox"] > div > div { display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; }
-div[data-testid="stSelectbox"] div[data-baseweb="select"] { width: 100% !important; justify-content: center !important; text-align: center !important; }
-div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !important; margin: 0 auto !important; position: absolute; left: 0; right: 0; }
-
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
-/* Keep grid absolutely horizontal on mobile */
 @media (max-width: 760px) { 
   .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } 
-  .mini-val { font-size: 1.25rem !important; } 
-  .mini-grid { grid-template-columns: repeat(3, 1fr) !important; } 
+  .mini-val { font-size: 1.25rem; } 
   .chart-meta { flex-direction: column; gap: 12px; } 
-  .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } 
-  .app-bar { align-items: flex-start; gap: 12px; } 
 }
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
@@ -854,7 +843,7 @@ if has_enough_weight_data:
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
         ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
-        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 # Force mathematically accurate R2 for microvariance
+        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0
         else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
         fit_type_w = 'point-to-point slope'
@@ -987,7 +976,6 @@ ideal_rates = st.session_state['goal_profiles'].get(active_goal, st.session_stat
 
 header_placeholder = st.empty()
 
-# Navigation wrapped in scoped container
 st.markdown('<div class="nav-container">', unsafe_allow_html=True)
 app_view = st.radio("Nav", ["Entry", "Nutrition", "Trends", "Analysis", "Data", "Settings"], horizontal=True, label_visibility="collapsed")
 st.markdown('</div>', unsafe_allow_html=True)
@@ -996,7 +984,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 11</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 12</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1060,7 +1048,7 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Completely decoupled sliders (No on_change callbacks = NO CRASHES)
+    # Sliders with custom labels, value is shown natively
     w_val = float(last['Weight (kg)'])
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
     w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
