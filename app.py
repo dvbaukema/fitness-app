@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="METRICS | Beta",
+    page_title="METRICS | Stable",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -124,12 +124,12 @@ def traj_bar(label, actual_rate, metric, profile, unit, mmt=None, bft=None, err_
     pct = max(min(pct, 97), 3)
     bg_grad = get_gradient(metric, profile, max_bound, is_smart_override)
 
-    # Increased visibility for error bars
     err_pct_width = (err_rate / (2 * max_bound)) * 100 if max_bound > 0 else 0
     err_left = max(0, pct - err_pct_width)
     err_right = min(100, pct + err_pct_width)
     actual_err_width = err_right - err_left
-    err_html = f"<div style='position:absolute; top:2px; bottom:2px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.4; z-index:4; border-radius:4px;'></div>"
+    
+    err_html = f"<div style='position:absolute; top:4px; bottom:4px; left:{err_left}%; width:{actual_err_width}%; background:var(--text-main); opacity:0.85; z-index:4; border-radius:2px;'></div>"
 
     html_block = f"""
     <div class='tj-blk'>
@@ -287,10 +287,8 @@ def load_body_data(sheet_url):
     df = read_sheet_range(sheet_url, 'Data!A:E')
     if df.empty: return pd.DataFrame(columns=['Date', 'Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)'])
     
-    if 'Time' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
-    else:
-        df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
+    if 'Time' in df.columns: df['Date'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str), format='mixed', errors='coerce')
+    else: df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
         
     for m in ['Weight (kg)', 'Body Fat (%)', 'Muscle Mass (kg)']:
         if m in df.columns: df[m] = pd.to_numeric(df[m], errors='coerce')
@@ -335,7 +333,6 @@ def overwrite_body_sheet(sheet_url, df):
     for _, row in df.iterrows():
         d = pd.Timestamp(row['Date'])
         values.append([d.strftime('%Y-%m-%d'), d.strftime('%H:%M:%S'), float(row['Weight (kg)']), float(row['Body Fat (%)']), float(row['Muscle Mass (kg)'])])
-    
     out_df = pd.DataFrame(values[1:], columns=values[0])
     return overwrite_sheet_range(sheet_url, 'Data!A:E', out_df)
 
@@ -389,18 +386,21 @@ def collect_app_settings():
 
 def sync_query_params_from_settings():
     settings = collect_app_settings()
-    st.query_params.goal = settings['goal']
-    st.query_params.theme = settings['theme']
-    st.query_params.activity = settings['activity']
-    st.query_params.protein_custom = str(settings['protein_custom'])
-    st.query_params.calorie_offset = str(settings['calorie_offset'])
-    st.query_params.calorie_custom = str(settings['calorie_custom'])
-    st.query_params.start = settings['analysis_start']
-    st.query_params.end = settings['target_end']
-    st.query_params.gym_start = settings['gym_start']
-    st.query_params.mm_mode = settings['muscle_mass_input_mode']
-    st.query_params.enable_quotes = "1" if settings['enable_quotes'] else "0"
-    st.query_params.enable_achievements = "1" if settings['enable_achievements'] else "0"
+    try:
+        st.query_params["goal"] = settings['goal']
+        st.query_params["theme"] = settings['theme']
+        st.query_params["activity"] = settings['activity']
+        st.query_params["protein_custom"] = str(settings['protein_custom'])
+        st.query_params["calorie_offset"] = str(settings['calorie_offset'])
+        st.query_params["calorie_custom"] = str(settings['calorie_custom'])
+        st.query_params["start"] = settings['analysis_start']
+        st.query_params["end"] = settings['target_end']
+        st.query_params["gym_start"] = settings['gym_start']
+        st.query_params["mm_mode"] = settings['muscle_mass_input_mode']
+        st.query_params["enable_quotes"] = "1" if settings['enable_quotes'] else "0"
+        st.query_params["enable_achievements"] = "1" if settings['enable_achievements'] else "0"
+    except Exception:
+        pass
 
 def persist_app_settings(sheet_url):
     sync_query_params_from_settings()
@@ -491,8 +491,7 @@ if 'calorie_offset' not in st.session_state: st.session_state['calorie_offset'] 
 if 'calorie_custom' not in st.session_state: st.session_state['calorie_custom'] = parse_int_setting(st.query_params.get("calorie_custom", DEFAULT_SETTINGS['calorie_custom']), DEFAULT_SETTINGS['calorie_custom'])
 if 'protein_custom' not in st.session_state: st.session_state['protein_custom'] = parse_int_setting(st.query_params.get("protein_custom", DEFAULT_SETTINGS['protein_custom']), DEFAULT_SETTINGS['protein_custom'])
 if 'muscle_mass_input_mode' not in st.session_state: st.session_state['muscle_mass_input_mode'] = st.query_params.get("mm_mode", DEFAULT_SETTINGS['muscle_mass_input_mode'])
-if st.session_state['muscle_mass_input_mode'] not in MUSCLE_INPUT_MODES:
-    st.session_state['muscle_mass_input_mode'] = DEFAULT_SETTINGS['muscle_mass_input_mode']
+if st.session_state['muscle_mass_input_mode'] not in MUSCLE_INPUT_MODES: st.session_state['muscle_mass_input_mode'] = DEFAULT_SETTINGS['muscle_mass_input_mode']
 
 if 'gym_start_date' not in st.session_state: st.session_state['gym_start_date'] = parse_date_setting(st.query_params.get("gym_start"), DEFAULT_SETTINGS['gym_start'])
 if 'analysis_start_date' not in st.session_state: st.session_state['analysis_start_date'] = parse_date_setting(st.query_params.get("start"), DEFAULT_SETTINGS['analysis_start'])
@@ -503,7 +502,7 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL
+# CSS — OVERHAUL (Custom Ruler Sliders & Grid Fixes)
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F7F8FA;
@@ -539,12 +538,12 @@ css_light_vars = """
 css_dark_vars = """
   --bg-primary: #0F0F0F;
   --bg-secondary: #181818;
-  --text-main: #F0EDE8;
-  --text-muted: rgba(240,237,232,0.55);
-  --text-subtle: rgba(240,237,232,0.3);
-  --surface: #1C1C1C;
-  --surface-hover: #222222;
-  --surface-active: #282828;
+  --text-main: #E2E8F0;
+  --text-muted: #94A3B8;
+  --text-subtle: #475569;
+  --surface: #1A2332;
+  --surface-hover: #1E293B;
+  --surface-active: #243044;
   --border: rgba(255,255,255,0.07);
   --border-strong: rgba(255,255,255,0.14);
   --c-emerald: #10B981;
@@ -555,16 +554,16 @@ css_dark_vars = """
   --c-rose-bg: rgba(248, 113, 113, 0.12);
   --c-blue: #60A5FA;
   --c-blue-bg: rgba(96, 165, 250, 0.12);
-  --c-blue-soft: rgba(96, 165, 250, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
-  --nav-bg: rgba(15, 15, 15, 0.88);
-  --nav-pill: #F0EDE8;
-  --nav-pill-text: #0F0F0F;
-  --nav-text: rgba(240,237,232,0.5);
-  --input-bg: #1C1C1C;
-  --input-text: #F0EDE8;
+  --c-blue-soft: rgba(96, 165, 250, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  --nav-bg: rgba(11, 15, 25, 0.88);
+  --nav-pill: #E2E8F0;
+  --nav-pill-text: #0B0F19;
+  --nav-text: #94A3B8;
+  --input-bg: #1A2332;
+  --input-text: #E2E8F0;
 """
 
 if st.session_state['theme_pref'] == "Dark": theme_block = f":root {{{css_dark_vars}}}"
@@ -577,16 +576,14 @@ css = theme_block + """
 *, *::before, *::after { box-sizing: border-box; }
 
 .stApp { background: var(--bg-primary) !important; font-family: 'DM Sans', sans-serif !important; }
-.block-container { padding-top: 1.5rem !important; padding-bottom: 6rem !important; max-width: 940px !important; }
+.block-container { padding-top: 2rem !important; padding-bottom: 6rem !important; max-width: 960px !important; }
 #MainMenu, footer, header { display: none !important; }
 
-/* ══════════════════════════════
-   APP BAR & NAV
-══════════════════════════════ */
-.app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
-.wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
-.tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.5px; }
-.live-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--c-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 100px; padding: 5px 12px; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1.5px; }
+/* ── App bar & nav ── */
+.app-bar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2.5rem; }
+.wordmark { font-family: 'DM Sans', sans-serif; font-size: 1.85rem; font-weight: 800; color: var(--text-main); letter-spacing: -1.5px; line-height: 1; }
+.tagline { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); margin-top: 5px; letter-spacing: 0.8px; }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--c-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; padding: 5px 14px; font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--c-emerald); font-weight: 600; letter-spacing: 1.5px; }
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-emerald); animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.7); } }
 
@@ -605,14 +602,12 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .quote-box { text-align: center; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); margin-bottom: 1.75rem; box-shadow: var(--shadow-sm); }
 .quote-text { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--text-muted); font-style: italic; font-weight: 400; line-height: 1.6; letter-spacing: 0.1px; }
 
-/* ══════════════════════════════
-   GRID & CARDS
-══════════════════════════════ */
-.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
-.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
+/* ── Grid & cards (FORCED HORIZONTAL ON MOBILE) ── */
+.mini-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; margin-bottom: 1.75rem; }
+.mini-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease; }
 .mini-cell:hover { box-shadow: var(--shadow-md); }
-.mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
-.mini-val { font-family: 'DM Mono', monospace; font-size: 1.55rem; font-weight: 600; color: var(--text-main); line-height: 1; display: inline-block;}
+.mini-lbl { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
+.mini-val { font-family: 'DM Mono', monospace; font-size: 1.6rem; font-weight: 600; color: var(--text-main); line-height: 1; display: inline-block;}
 .mini-unit { font-size: 0.65rem; color: var(--text-subtle); margin-left: 2px; font-weight: 400;}
 .mini-sub { font-family: 'DM Mono', monospace; font-size: 0.65rem; font-weight: 600; margin-top: 8px; display: block; letter-spacing: 0.5px;}
 
@@ -640,9 +635,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .bar-pin { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--text-main); box-shadow: 0 0 0 2px var(--bg-primary), 0 0 12px rgba(255,255,255,0.3); z-index: 5; transform: translateX(-50%); border-radius: 2px; }
 .tj-st { font-family: 'DM Mono', monospace; font-size: 0.58rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; display: block; margin-top: 8px; }
 
-/* ══════════════════════════════
-   ACHIEVEMENTS / TIERS
-══════════════════════════════ */
+/* ── Achievements ── */
 .tier-item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
 .tier-item.completed { background: var(--c-blue-bg); border-color: rgba(37,99,235,0.25); }
 .tier-item.completed .tier-name { color: var(--c-blue); }
@@ -655,26 +648,59 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .prog-tk { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 10px; }
 .prog-fill { height: 100%; background: var(--c-blue); border-radius: 3px; transition: width 0.6s ease; }
 
-/* ══════════════════════════════
-   HISTORY ROWS
-══════════════════════════════ */
+/* ── HISTORY ROWS ── */
 .hist-row { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; box-shadow: var(--shadow-sm); transition: box-shadow 0.15s ease; }
 .hist-row:hover { box-shadow: var(--shadow-md); }
 .del-btn button { background: transparent !important; border: none !important; color: var(--text-subtle) !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-size: 1.2rem !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
 .del-btn button:hover { color: var(--c-rose) !important; }
 
-/* ══════════════════════════════
-   ALERT BANNERS & INPUTS
-══════════════════════════════ */
+/* ── ALERT BANNERS & INPUTS ── */
 .alert-banner { padding: 10px 14px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-align: center; margin-bottom: 1rem; letter-spacing: 0.5px; }
 .alert-banner.warn { background: var(--c-amber-bg); border: 1px solid rgba(217,119,6,0.2); color: var(--c-amber); }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-div[data-testid="stSlider"] label { font-family: 'DM Mono', monospace !important; font-size: 0.65rem !important; color: var(--text-subtle) !important; text-transform: uppercase !important; font-weight: 500 !important; letter-spacing: 1.5px !important; }
-div[data-testid="stSlider"] > div > div > div { height: 10px !important; border-radius: 5px !important; background: var(--surface-active) !important; }
-div[data-testid="stSlider"] div[role="slider"] { width: 22px !important; height: 22px !important; background: var(--c-blue) !important; border: 3px solid var(--bg-primary) !important; box-shadow: var(--shadow-md) !important; }
+/* ── FIX: CLEAN RULER SLIDERS (NO DOUBLE BAR, SAFE CSS) ── */
+div[data-testid="stSlider"] {
+    padding-top: 2rem !important;
+    padding-bottom: 2.5rem !important;
+}
+div[data-testid="stSlider"] > div > div > div {
+    background: transparent !important; 
+    border: none !important;
+}
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div {
+    background-color: transparent !important;
+    background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
+    border-top: 2px solid var(--border-strong) !important;
+    border-radius: 0 !important;
+    height: 12px !important;
+}
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div:first-child {
+    display: none !important; 
+}
+div[data-testid="stSlider"] div[role="slider"] {
+    width: 4px !important;
+    height: 40px !important;
+    background: #FACC15 !important;
+    border: none !important;
+    border-radius: 2px !important;
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.6) !important;
+    transform: translateY(-14px) !important;
+}
+div[data-testid="stSlider"] div[role="slider"] > div {
+    font-size: 2.5rem !important;
+    font-weight: 800 !important;
+    color: var(--text-main) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    transform: translateY(-44px) !important;
+}
 
+/* ── Inputs & buttons ── */
 div[data-testid="stSelectbox"] { margin-bottom: 0 !important; }
 div[data-testid="stSelectbox"] > div > div { background: var(--input-bg) !important; border: 1px solid var(--border-strong) !important; border-radius: 12px !important; color: var(--input-text) !important; min-height: 3.2rem !important; box-shadow: var(--shadow-sm) !important; }
 div[data-testid="stSelectbox"] div[class*="singleValue"] { color: var(--input-text) !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
@@ -710,9 +736,15 @@ div[data-testid="stSelectbox"] div[class*="singleValue"] { text-align: center !i
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; margin-right: 6px !important; padding: 6px 14px !important; font-family: 'DM Sans', sans-serif !important; color: var(--text-muted) !important; }
-div[data-testid="stRadioGroup"] > div[role="radiogroup"] > label[data-checked="true"] { background: var(--surface-active) !important; border-color: var(--border-strong) !important; color: var(--text-main) !important; }
-@media (max-width: 760px) { .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } .mini-grid { grid-template-columns: 1fr; } .mini-cell[style*="grid-column"] { grid-column: span 1 !important; } .chart-meta { flex-direction: column; gap: 12px; } .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } .app-bar { align-items: flex-start; gap: 12px; } }
+/* Keep grid absolutely horizontal on mobile */
+@media (max-width: 760px) { 
+  .block-container { padding-left: 1rem !important; padding-right: 1rem !important; } 
+  .mini-val { font-size: 1.25rem !important; } 
+  .mini-grid { grid-template-columns: repeat(3, 1fr) !important; } 
+  .chart-meta { flex-direction: column; gap: 12px; } 
+  .chart-meta > div:last-child { align-items: flex-start !important; text-align: left !important; } 
+  .app-bar { align-items: flex-start; gap: 12px; } 
+}
 """
 st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
@@ -758,7 +790,7 @@ if st.session_state.get('is_admin') and not st.session_state['auth_status']:
                 st.session_state['current_user'] = user_key
                 st.session_state['sheet_url'] = url
                 st.session_state['is_admin'] = True
-                st.query_params.user = user_key
+                st.query_params["user"] = user_key
                 st.rerun()
     st.stop()
 
@@ -799,6 +831,7 @@ analysis_start = pd.to_datetime(st.session_state['analysis_start_date'])
 target_end_date = pd.to_datetime(st.session_state['target_end_date'])
 end_label = target_end_date.strftime('%b %d').upper()
 
+# Isolate Data Before EMA Calculation to block ghost momentum
 df_window_full = df[df['Date'] >= analysis_start].copy()
 
 if not df_window_full.empty:
@@ -835,7 +868,8 @@ if has_enough_weight_data:
         
         ss_res_w = np.sum((y_w - fit_y_w)**2)
         ss_tot_w = np.sum((y_w - np.mean(y_w))**2)
-        r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
+        if ss_tot_w < 0.001 and ss_res_w < 0.001: r2_w = 1.0 
+        else: r2_w = max(0.0, 1 - (ss_res_w / ss_tot_w)) if ss_tot_w != 0 else 1.0
         
         fit_type_w = 'point-to-point slope'
     else:
@@ -876,15 +910,12 @@ if has_enough_weight_data:
             'preds': pred_y_w,
             'upper': pred_y_w + margin_of_error_w,
             'lower': pred_y_w - margin_of_error_w,
-            'final_error': margin_of_error_w[-10],
+            'final_error': margin_of_error_w[-1] if len(margin_of_error_w) > 0 else 0,
             'fit_dates': df_w['Date'].tolist(),
             'fit': fit_y_w,
         }
     else:
-        traj_data['Weight (kg)'] = {
-            'fit_dates': df_w['Date'].tolist(),
-            'fit': fit_y_w,
-        }
+        traj_data['Weight (kg)'] = {'fit_dates': df_w['Date'].tolist(), 'fit': fit_y_w}
 
 if has_enough_comp_data:
     df_c = df_window_full if len(df_window_full) >= 5 else df.tail(5).copy()
@@ -913,9 +944,7 @@ if has_enough_comp_data:
             
             ss_res_c = np.sum((y_c - fit_y_c)**2)
             ss_tot_c = np.sum((y_c - np.mean(y_c))**2)
-            
-            # Fix R2=0 bug for micro-variance in Body Fat
-            if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0
+            if ss_tot_c < 0.001 and ss_res_c < 0.001: r2_c = 1.0 
             else: r2_c = max(0.0, 1 - (ss_res_c / ss_tot_c)) if ss_tot_c != 0 else 1.0
             fit_type_c = 'point-to-point slope'
         else:
@@ -951,7 +980,7 @@ if has_enough_comp_data:
                 'preds': pred_y_c,
                 'upper': pred_y_c + margin_of_error_c,
                 'lower': pred_y_c - margin_of_error_c,
-                'final_error': margin_of_error_c[-10],
+                'final_error': margin_of_error_c[-1] if len(margin_of_error_c) > 0 else 0,
                 'fit_dates': df_c['Date'].tolist(),
                 'fit': fit_y_c,
             }
@@ -978,7 +1007,7 @@ header_placeholder.markdown(f"""
 <div class="app-bar">
     <div>
         <div class="wordmark">Metrics</div>
-        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Beta 7</div>
+        <div class="tagline">{get_display_name(st.session_state['current_user'])} · Stable</div>
     </div>
     <div class="live-pill"><div class="live-dot"></div>SYNCED</div>
 </div>
@@ -1039,38 +1068,35 @@ if app_view == "Entry":
             <div class="mini-sub {dclass(delta_bf, invert=True)}">{sgn(delta_bf)}{delta_bf:.1f}%</div>
         </div>
     </div>
-    <div class="s-head">New Entry</div>
+    <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    if 'entry_w' not in st.session_state: st.session_state.entry_w = float(last['Weight (kg)'])
-    if 'entry_bf' not in st.session_state: st.session_state.entry_bf = float(last['Body Fat (%)'])
-    if 'entry_m' not in st.session_state: st.session_state.entry_m = float(last['Muscle Mass (kg)'])
-    if 'entry_m_pct' not in st.session_state: st.session_state.entry_m_pct = (st.session_state.entry_m / st.session_state.entry_w) * 100 if st.session_state.entry_w > 0 else 45.0
+    # 100% Stateless Sliders - Impossible to cause infinite loops
+    w_val = float(last['Weight (kg)'])
+    m_val = float(last['Muscle Mass (kg)'])
+    bf_val = float(last['Body Fat (%)'])
+    last_m_pct = (m_val / w_val) * 100 if w_val > 0 else 45.0
 
-    def update_m_from_pct():
-        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
-
-    def update_pct_from_w():
-        st.session_state.entry_m = st.session_state.entry_w * (st.session_state.entry_m_pct / 100.0)
-
-    st.slider("Weight (kg)", min_value=max(0.0, float(last['Weight (kg)'])-2.5), max_value=float(last['Weight (kg)'])+2.5, step=0.1, key="entry_w", on_change=update_pct_from_w)
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
+    w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
     
-    st.markdown("<div style='margin-top: 15px; margin-bottom: -15px; font-family:\"DM Mono\", monospace; font-size: 0.65rem; color: var(--text-subtle); font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px;'>Muscle Mass Input Mode</div>", unsafe_allow_html=True)
-    mm_mode = st.radio("Muscle Mass Input Mode", ["Kilograms (kg)", "Percentage (%)"], horizontal=True, label_visibility="collapsed")
-    
+    mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
-        st.slider("Muscle Mass (kg)", min_value=max(0.0, float(last['Muscle Mass (kg)'])-2.5), max_value=float(last['Muscle Mass (kg)'])+2.5, step=0.1, key="entry_m")
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
+        m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
     else:
-        st.slider("Muscle Mass (%)", min_value=max(0.0, st.session_state.entry_m_pct-5.0), max_value=min(100.0, st.session_state.entry_m_pct+5.0), step=0.1, key="entry_m_pct", on_change=update_m_from_pct)
-        st.markdown(f"<div class='data-note' style='text-align:right; margin-top:6px;'>Calculated muscle mass: {st.session_state.entry_m:.1f} kg</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, last_m_pct-5.0), max_value=min(100.0, last_m_pct+5.0), value=last_m_pct, step=0.1, label_visibility="collapsed")
+        m = w * (m_pct / 100.0)
 
-    st.slider("Body Fat (%)", min_value=max(3.0, float(last['Body Fat (%)'])-2.5), max_value=float(last['Body Fat (%)'])+2.5, step=0.1, key="entry_bf")
+    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
+    bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
             now_str = datetime.now().strftime('%Y-%m-%d')
-            append_body_entry(st.session_state['sheet_url'], now_str, st.session_state.entry_w, st.session_state.entry_m, st.session_state.entry_bf)
-            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [st.session_state.entry_w], 'Body Fat (%)': [st.session_state.entry_bf], 'Muscle Mass (kg)': [st.session_state.entry_m]})], ignore_index=True)
+            append_body_entry(st.session_state['sheet_url'], now_str, w, m, bf)
+            st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
             if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
             system_alert("Saved")
@@ -1196,8 +1222,8 @@ elif app_view == "Trends":
         elif metric == 'Body Fat (%)': err_pct = 5.0
         else: err_pct = 1.0
 
-        if 'preds' in traj_data.get(metric, {}):
-            final_pred = traj_data[metric]['preds'][-10] 
+        if 'preds' in traj_data.get(metric, {}) and len(traj_data[metric]['preds']) > 0:
+            final_pred = traj_data[metric]['preds'][-1] 
             final_error = traj_data[metric]['final_error']
             lower_proj = final_pred - final_error
             upper_proj = final_pred + final_error
@@ -1263,7 +1289,7 @@ elif app_view == "Trends":
                 hovertemplate='Fit: %{y:.1f} {unit}<extra></extra>'.replace('{unit}', unit)
             ))
 
-        if 'dates' in traj_data.get(metric, {}):
+        if 'dates' in traj_data.get(metric, {}) and len(traj_data[metric]['dates']) > 0:
             x_vals = traj_data[metric]['dates']
             y_upper = traj_data[metric]['upper']
             y_lower = traj_data[metric]['lower']
@@ -1300,16 +1326,25 @@ elif app_view == "Trends":
 
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=20, b=45), height=200, showlegend=True,
-            legend=dict(orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
+            margin=dict(l=0, r=0, t=20, b=45), height=320, showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=9, color='gray')),
             xaxis=dict(showgrid=False, zeroline=False, tickfont=font_cfg, tickformat='%b %d', range=[df['Date'].min(), target_end_date + timedelta(days=10)]),
             yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', zeroline=False, tickfont=font_cfg, side='right')
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear regression'})
+        fit = trend_stats.get(metric, {'n': 0, 'days': 0, 'r2': 0, 'slope': 0, 'type': 'linear fit'})
         st.markdown(
-            f"<div class='fit-note'>Fit basis: {fit['n']} logs over {fit['days']:.1f} days. EMA is smoothed first, then the orange {fit['type']} estimates {sgn(fit['slope'])}{fit['slope']:.3f} {unit}/day. Weekly trend = slope × 7; monthly reference = slope × 30. R² {fit['r2']:.2f}. Error bars reflect Tanita RD-953 precision (±1% mass variation, ±5% DEXA relative accuracy for body fat).</div>",
+            f"""<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px;">
+                <div style="font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); line-height: 1.4;">
+                    <b>Algorithm:</b> EMA smoothed → {fit['type'].title()}<br>
+                    <b>Horizon:</b> {fit['n']} logs over {fit['days']:.1f} days
+                </div>
+                <div style="font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-subtle); line-height: 1.4; text-align:right;">
+                    <b>Variance (R²):</b> {fit['r2']:.2f}<br>
+                    <b>Error Margins:</b> ±{err_pct}% BIA spec
+                </div>
+            </div>""",
             unsafe_allow_html=True
         )
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1509,11 +1544,11 @@ elif app_view == "Data":
             column_config={
                 'Date': st.column_config.TextColumn('Date', width='medium'),
                 'Weight (kg)': st.column_config.NumberColumn('Weight', format='%.1f kg'),
-                'Weight Δ': st.column_config.NumberColumn('Δ Weight', format='%+.1f'),
+                'Weight Δ': st.column_config.NumberColumn('Δ Weight', format='%.1f'),
                 'Muscle Mass (kg)': st.column_config.NumberColumn('Muscle', format='%.1f kg'),
-                'Muscle Δ': st.column_config.NumberColumn('Δ Muscle', format='%+.1f'),
+                'Muscle Δ': st.column_config.NumberColumn('Δ Muscle', format='%.1f'),
                 'Body Fat (%)': st.column_config.NumberColumn('Fat', format='%.1f%%'),
-                'Fat Δ': st.column_config.NumberColumn('Δ Fat', format='%+.1f'),
+                'Fat Δ': st.column_config.NumberColumn('Δ Fat', format='%.1f'),
             }
         )
         st.markdown("<div class='data-note'>Deletion is limited to records from the last 7 days so older history stays protected.</div>", unsafe_allow_html=True)
@@ -1599,7 +1634,7 @@ elif app_view == "Settings":
         st.markdown("<div class='alert-banner danger'>Target end date must be after the tracking start date.</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="settings-lbl">Entry Preferences</div>', unsafe_allow_html=True)
-    muscle_mode = st.selectbox("Muscle Mass Input", MUSCLE_INPUT_MODES, index=MUSCLE_INPUT_MODES.index(st.session_state.get('muscle_mass_input_mode', DEFAULT_SETTINGS['muscle_mass_input_mode'])))
+    muscle_mode = st.selectbox("Muscle Mass Input Mode", MUSCLE_INPUT_MODES, index=MUSCLE_INPUT_MODES.index(st.session_state.get('muscle_mass_input_mode', DEFAULT_SETTINGS['muscle_mass_input_mode'])))
 
     st.markdown('<div class="settings-lbl">System Preferences</div>', unsafe_allow_html=True)
     new_theme = st.selectbox("Theme", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
