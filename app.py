@@ -660,7 +660,7 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* ── FIX: CLEAN RULER SLIDERS (NO DOUBLE BAR, SAFE CSS) ── */
+/* ── FIX: CLEAN RULER SLIDERS (INFINITE JOG DIAL STYLE) ── */
 div[data-testid="stSlider"] {
     padding-top: 2rem !important;
     padding-bottom: 2.5rem !important;
@@ -674,22 +674,26 @@ div[data-testid="stSlider"] div[data-baseweb="slider"] > div {
     background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
     border-top: 2px solid var(--border-strong) !important;
     border-radius: 0 !important;
-    height: 12px !important;
+    height: 16px !important;
 }
+/* MUST BE TRANSPARENT TO PRESERVE HITBOX PHYSICS ON MOBILE */
 div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div:first-child {
-    display: none !important; 
+    background: transparent !important; 
 }
 div[data-testid="stSlider"] div[role="slider"] {
-    width: 4px !important;
-    height: 40px !important;
+    width: 6px !important;
+    height: 32px !important;
     background: #FACC15 !important;
     border: none !important;
-    border-radius: 2px !important;
+    border-radius: 3px !important;
     box-shadow: 0 0 12px rgba(250, 204, 21, 0.6) !important;
-    transform: translateY(-14px) !important;
+    margin-top: -8px !important; /* Gentle position tweak */
+}
+div[data-testid="stSlider"] div[role="slider"]:focus {
+    outline: none !important;
 }
 div[data-testid="stSlider"] div[role="slider"] > div {
-    font-size: 2.5rem !important;
+    font-size: 2.4rem !important;
     font-weight: 800 !important;
     color: var(--text-main) !important;
     font-family: 'DM Sans', sans-serif !important;
@@ -697,7 +701,10 @@ div[data-testid="stSlider"] div[role="slider"] > div {
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
-    transform: translateY(-44px) !important;
+    position: absolute !important;
+    top: -46px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
 }
 
 /* ── Inputs & buttons ── */
@@ -1071,7 +1078,12 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # Stateful Sliders - Fixes snapping and state loss bugs
+    # -------------------------------------------------------------
+    # "INFINITE JOG DIAL" SLIDERS
+    # These sliders center exactly on the currently swiped value.
+    # Every swipe modifies the state, immediately resetting the UI to 
+    # the dead-center again, allowing infinite continuous nudging!
+    # -------------------------------------------------------------
     w_val_db = round(float(last['Weight (kg)']), 1)
     m_val_db = round(float(last['Muscle Mass (kg)']), 1)
     bf_val_db = round(float(last['Body Fat (%)']), 1)
@@ -1085,20 +1097,28 @@ if app_view == "Entry":
         st.session_state['sliders_initialized'] = True
         st.session_state['reset_sliders'] = False
 
+    # Fetch safely rounded active value to use as our center point
+    curr_w = round(float(st.session_state['sl_w']), 1)
+    curr_m = round(float(st.session_state['sl_m']), 1)
+    curr_bf = round(float(st.session_state['sl_bf']), 1)
+    curr_m_pct = round(float(st.session_state['sl_m_pct']), 1)
+
+    # Note the narrowed bounds (-5.0 / +5.0). 
+    # This stretches the swipe distance, allowing very fine precision!
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
-    w = st.slider("Weight", min_value=max(0.0, w_val_db-20.0), max_value=w_val_db+20.0, key="sl_w", step=0.1, label_visibility="collapsed")
+    w = st.slider("Weight", min_value=max(0.0, round(curr_w - 5.0, 1)), max_value=round(curr_w + 5.0, 1), key="sl_w", step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
-        m = st.slider("Muscle Mass", min_value=max(0.0, m_val_db-15.0), max_value=m_val_db+15.0, key="sl_m", step=0.1, label_visibility="collapsed")
+        m = st.slider("Muscle Mass", min_value=max(0.0, round(curr_m - 3.0, 1)), max_value=round(curr_m + 3.0, 1), key="sl_m", step=0.1, label_visibility="collapsed")
     else:
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
-        m_pct = st.slider("Muscle Mass", min_value=max(0.0, last_m_pct_db-15.0), max_value=min(100.0, last_m_pct_db+15.0), key="sl_m_pct", step=0.1, label_visibility="collapsed")
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, round(curr_m_pct - 3.0, 1)), max_value=min(100.0, round(curr_m_pct + 3.0, 1)), key="sl_m_pct", step=0.1, label_visibility="collapsed")
         m = w * (m_pct / 100.0)
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
-    bf = st.slider("Body Fat", min_value=max(3.0, bf_val_db-15.0), max_value=bf_val_db+15.0, key="sl_bf", step=0.1, label_visibility="collapsed")
+    bf = st.slider("Body Fat", min_value=max(3.0, round(curr_bf - 3.0, 1)), max_value=round(curr_bf + 3.0, 1), key="sl_bf", step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
