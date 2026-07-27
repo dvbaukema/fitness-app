@@ -502,7 +502,7 @@ if st.session_state['activity_level'] not in ACTIVITY_MULTIPLIERS: st.session_st
 if st.session_state['theme_pref'] not in ["System", "Dark", "Light"]: st.session_state['theme_pref'] = DEFAULT_SETTINGS['theme']
     
 # ══════════════════════════════════════════════════════════════
-# CSS — OVERHAUL (Custom Ruler Sliders & Grid Fixes)
+# CSS — CLEARED HACKS TO FIX SLIDERS
 # ══════════════════════════════════════════════════════════════
 css_light_vars = """
   --bg-primary: #F7F8FA;
@@ -660,51 +660,10 @@ div[data-testid="stSegmentedControl"] { display: none !important; }
 .alert-banner.danger { background: var(--c-rose-bg); border: 1px solid rgba(220,38,38,0.2); color: var(--c-rose); }
 .alert-banner.info { background: var(--c-blue-bg); border: 1px solid rgba(37,99,235,0.2); color: var(--c-blue); }
 
-/* ── FIX: CLEAN RULER SLIDERS (INFINITE JOG DIAL STYLE) ── */
+/* ── CLEARED SLIDER HACKS - Keeps standard solid slider robust ── */
 div[data-testid="stSlider"] {
-    padding-top: 2rem !important;
-    padding-bottom: 2.5rem !important;
-}
-div[data-testid="stSlider"] > div > div > div {
-    background: transparent !important; 
-    border: none !important;
-}
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div {
-    background-color: transparent !important;
-    background-image: repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 2px, transparent 2px, transparent 10%) !important;
-    border-top: 2px solid var(--border-strong) !important;
-    border-radius: 0 !important;
-    height: 16px !important;
-}
-/* MUST BE TRANSPARENT TO PRESERVE HITBOX PHYSICS ON MOBILE */
-div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div > div:first-child {
-    background: transparent !important; 
-}
-div[data-testid="stSlider"] div[role="slider"] {
-    width: 6px !important;
-    height: 32px !important;
-    background: #FACC15 !important;
-    border: none !important;
-    border-radius: 3px !important;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.6) !important;
-    margin-top: -8px !important; /* Gentle position tweak */
-}
-div[data-testid="stSlider"] div[role="slider"]:focus {
-    outline: none !important;
-}
-div[data-testid="stSlider"] div[role="slider"] > div {
-    font-size: 2.4rem !important;
-    font-weight: 800 !important;
-    color: var(--text-main) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    position: absolute !important;
-    top: -46px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1.5rem !important;
 }
 
 /* ── Inputs & buttons ── */
@@ -1079,46 +1038,67 @@ if app_view == "Entry":
     """, unsafe_allow_html=True)
 
     # -------------------------------------------------------------
-    # "INFINITE JOG DIAL" SLIDERS
-    # These sliders center exactly on the currently swiped value.
-    # Every swipe modifies the state, immediately resetting the UI to 
-    # the dead-center again, allowing infinite continuous nudging!
+    # FIXED SLIDER LOGIC
+    # The bounds are strictly anchored to the absolute database values.
+    # They will NEVER shift or re-calculate during a swipe.
     # -------------------------------------------------------------
+    
+    # 1. Capture the exact static database values
     w_val_db = round(float(last['Weight (kg)']), 1)
     m_val_db = round(float(last['Muscle Mass (kg)']), 1)
     bf_val_db = round(float(last['Body Fat (%)']), 1)
     last_m_pct_db = round((m_val_db / w_val_db) * 100, 1) if w_val_db > 0 else 45.0
 
-    if 'sliders_initialized' not in st.session_state or st.session_state.get('reset_sliders'):
+    # 2. Only override session_state if it's brand new, or if we just clicked "Save"
+    if 'sl_w' not in st.session_state or st.session_state.get('reset_sliders', False):
         st.session_state['sl_w'] = w_val_db
         st.session_state['sl_m'] = m_val_db
-        st.session_state['sl_bf'] = bf_val_db
         st.session_state['sl_m_pct'] = last_m_pct_db
-        st.session_state['sliders_initialized'] = True
+        st.session_state['sl_bf'] = bf_val_db
         st.session_state['reset_sliders'] = False
 
-    # Fetch safely rounded active value to use as our center point
-    curr_w = round(float(st.session_state['sl_w']), 1)
-    curr_m = round(float(st.session_state['sl_m']), 1)
-    curr_bf = round(float(st.session_state['sl_bf']), 1)
-    curr_m_pct = round(float(st.session_state['sl_m_pct']), 1)
+    # 3. Calculate FIXED bounds based ONLY on the database value.
+    w_min, w_max = max(0.0, w_val_db - 20.0), w_val_db + 20.0
+    m_min, m_max = max(0.0, m_val_db - 15.0), m_val_db + 15.0
+    mp_min, mp_max = max(0.0, last_m_pct_db - 15.0), min(100.0, last_m_pct_db + 15.0)
+    bf_min, bf_max = max(3.0, bf_val_db - 15.0), bf_val_db + 15.0
 
-    # Note the narrowed bounds (-5.0 / +5.0). 
-    # This stretches the swipe distance, allowing very fine precision!
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
-    w = st.slider("Weight", min_value=max(0.0, round(curr_w - 5.0, 1)), max_value=round(curr_w + 5.0, 1), key="sl_w", step=0.1, label_visibility="collapsed")
+    
+    # 4. Render native sliders mapped safely to session_state
+    w = st.slider("Weight", min_value=w_min, max_value=w_max, key="sl_w", step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
-        m = st.slider("Muscle Mass", min_value=max(0.0, round(curr_m - 3.0, 1)), max_value=round(curr_m + 3.0, 1), key="sl_m", step=0.1, label_visibility="collapsed")
+        m = st.slider("Muscle Mass", min_value=m_min, max_value=m_max, key="sl_m", step=0.1, label_visibility="collapsed")
     else:
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
-        m_pct = st.slider("Muscle Mass", min_value=max(0.0, round(curr_m_pct - 3.0, 1)), max_value=min(100.0, round(curr_m_pct + 3.0, 1)), key="sl_m_pct", step=0.1, label_visibility="collapsed")
+        m_pct = st.slider("Muscle Mass", min_value=mp_min, max_value=mp_max, key="sl_m_pct", step=0.1, label_visibility="collapsed")
         m = w * (m_pct / 100.0)
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
-    bf = st.slider("Body Fat", min_value=max(3.0, round(curr_bf - 3.0, 1)), max_value=round(curr_bf + 3.0, 1), key="sl_bf", step=0.1, label_visibility="collapsed")
+    bf = st.slider("Body Fat", min_value=bf_min, max_value=bf_max, key="sl_bf", step=0.1, label_visibility="collapsed")
+
+    # Big display readout so it looks nice without hacking the slider!
+    st.markdown(f"""
+    <div style='display:flex; justify-content:space-around; align-items:center; margin-top:1rem; margin-bottom: 2rem; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px;'>
+        <div style='text-align:center;'>
+            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{w:.1f}</div>
+            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>W (kg)</div>
+        </div>
+        <div style='width:1px; height:30px; background:var(--border);'></div>
+        <div style='text-align:center;'>
+            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{m:.1f}</div>
+            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>M (kg)</div>
+        </div>
+        <div style='width:1px; height:30px; background:var(--border);'></div>
+        <div style='text-align:center;'>
+            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{bf:.1f}</div>
+            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>BF (%)</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
@@ -1127,7 +1107,10 @@ if app_view == "Entry":
             st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
             if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
+            
+            # This flag forces the sliders back to dead-center on the new value upon save
             st.session_state['reset_sliders'] = True
+            
             system_alert("Saved")
             st.rerun()
 
