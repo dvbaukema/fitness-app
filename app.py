@@ -1071,26 +1071,34 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # 100% Stateless Sliders - Impossible to cause infinite loops
-    w_val = float(last['Weight (kg)'])
-    m_val = float(last['Muscle Mass (kg)'])
-    bf_val = float(last['Body Fat (%)'])
-    last_m_pct = (m_val / w_val) * 100 if w_val > 0 else 45.0
+    # Stateful Sliders - Fixes snapping and state loss bugs
+    w_val_db = round(float(last['Weight (kg)']), 1)
+    m_val_db = round(float(last['Muscle Mass (kg)']), 1)
+    bf_val_db = round(float(last['Body Fat (%)']), 1)
+    last_m_pct_db = round((m_val_db / w_val_db) * 100, 1) if w_val_db > 0 else 45.0
+
+    if 'sliders_initialized' not in st.session_state or st.session_state.get('reset_sliders'):
+        st.session_state['sl_w'] = w_val_db
+        st.session_state['sl_m'] = m_val_db
+        st.session_state['sl_bf'] = bf_val_db
+        st.session_state['sl_m_pct'] = last_m_pct_db
+        st.session_state['sliders_initialized'] = True
+        st.session_state['reset_sliders'] = False
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
-    w = st.slider("Weight", min_value=max(0.0, w_val-5.0), max_value=w_val+5.0, value=w_val, step=0.1, label_visibility="collapsed")
+    w = st.slider("Weight", min_value=max(0.0, w_val_db-20.0), max_value=w_val_db+20.0, key="sl_w", step=0.1, label_visibility="collapsed")
     
     mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
     if mm_mode == "Kilograms (kg)":
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
-        m = st.slider("Muscle Mass", min_value=max(0.0, m_val-5.0), max_value=m_val+5.0, value=m_val, step=0.1, label_visibility="collapsed")
+        m = st.slider("Muscle Mass", min_value=max(0.0, m_val_db-15.0), max_value=m_val_db+15.0, key="sl_m", step=0.1, label_visibility="collapsed")
     else:
         st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
-        m_pct = st.slider("Muscle Mass", min_value=max(0.0, last_m_pct-5.0), max_value=min(100.0, last_m_pct+5.0), value=last_m_pct, step=0.1, label_visibility="collapsed")
+        m_pct = st.slider("Muscle Mass", min_value=max(0.0, last_m_pct_db-15.0), max_value=min(100.0, last_m_pct_db+15.0), key="sl_m_pct", step=0.1, label_visibility="collapsed")
         m = w * (m_pct / 100.0)
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
-    bf = st.slider("Body Fat", min_value=max(3.0, bf_val-5.0), max_value=bf_val+5.0, value=bf_val, step=0.1, label_visibility="collapsed")
+    bf = st.slider("Body Fat", min_value=max(3.0, bf_val_db-15.0), max_value=bf_val_db+15.0, key="sl_bf", step=0.1, label_visibility="collapsed")
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
@@ -1099,6 +1107,7 @@ if app_view == "Entry":
             st.session_state['active_df'] = pd.concat([st.session_state['active_df'], pd.DataFrame({'Date': [datetime.now()], 'Weight (kg)': [w], 'Body Fat (%)': [bf], 'Muscle Mass (kg)': [m]})], ignore_index=True)
             load_data.clear()
             if st.session_state['enable_quotes']: st.session_state['daily_quote'] = random.choice(st.session_state['all_quotes'])
+            st.session_state['reset_sliders'] = True
             system_alert("Saved")
             st.rerun()
 
@@ -1566,6 +1575,7 @@ elif app_view == "Data":
                 overwrite_body_sheet(st.session_state['sheet_url'], new_df)
                 st.session_state['active_df'] = new_df
                 load_data.clear()
+                st.session_state['reset_sliders'] = True
                 system_alert("Deleted", "err")
                 st.rerun()
         else:
