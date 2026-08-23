@@ -1038,30 +1038,54 @@ if app_view == "Entry":
     """, unsafe_allow_html=True)
 
     # -------------------------------------------------------------
-    # FIXED SLIDER LOGIC
-    # The bounds are strictly anchored to the absolute database values.
-    # They will NEVER shift or re-calculate during a swipe.
+    # FIXED SLIDER LOGIC (crash-safe)
+    # The bounds are anchored to the absolute database values, and
+    # the current session_state value is ALWAYS clamped into those
+    # bounds before the widget is instantiated. This prevents the
+    # StreamlitAPIException ("the default value ... must be between
+    # min_value and max_value") that was crashing the Entry tab
+    # whenever a new logged value (or a deleted/edited row) shifted
+    # the DB-anchored bounds so the old slider position fell outside
+    # the new [min, max] range.
     # -------------------------------------------------------------
-    
+
+    def _clamp(v, lo, hi):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return lo
+        if hi < lo:
+            lo, hi = hi, lo
+        return min(max(v, lo), hi)
+
     # 1. Capture the exact static database values
     w_val_db = round(float(last['Weight (kg)']), 1)
     m_val_db = round(float(last['Muscle Mass (kg)']), 1)
     bf_val_db = round(float(last['Body Fat (%)']), 1)
     last_m_pct_db = round((m_val_db / w_val_db) * 100, 1) if w_val_db > 0 else 45.0
 
-    # 2. Only override session_state if it's brand new, or if we just clicked "Save"
-    if 'sl_w' not in st.session_state or st.session_state.get('reset_sliders', False):
-        st.session_state['sl_w'] = w_val_db
-        st.session_state['sl_m'] = m_val_db
-        st.session_state['sl_m_pct'] = last_m_pct_db
-        st.session_state['sl_bf'] = bf_val_db
-        st.session_state['reset_sliders'] = False
-
-    # 3. Calculate FIXED bounds based ONLY on the database value.
+    # 2. Calculate FIXED bounds based ONLY on the database value.
     w_min, w_max = max(0.0, w_val_db - 20.0), w_val_db + 20.0
     m_min, m_max = max(0.0, m_val_db - 15.0), m_val_db + 15.0
     mp_min, mp_max = max(0.0, last_m_pct_db - 15.0), min(100.0, last_m_pct_db + 15.0)
     bf_min, bf_max = max(3.0, bf_val_db - 15.0), bf_val_db + 15.0
+
+    # 3. Only override session_state if it's brand new, or if we just clicked "Save"
+    if 'sl_w' not in st.session_state or st.session_state.get('reset_sliders', False):
+        st.session_state['sl_w'] = _clamp(w_val_db, w_min, w_max)
+        st.session_state['sl_m'] = _clamp(m_val_db, m_min, m_max)
+        st.session_state['sl_m_pct'] = _clamp(last_m_pct_db, mp_min, mp_max)
+        st.session_state['sl_bf'] = _clamp(bf_val_db, bf_min, bf_max)
+        st.session_state['reset_sliders'] = False
+    else:
+        # Existing session state could be stale relative to freshly
+        # recomputed DB-anchored bounds (e.g. after a delete, an edit
+        # elsewhere, or a mode switch) — always re-clamp before the
+        # widgets below are created, or Streamlit will raise.
+        st.session_state['sl_w'] = _clamp(st.session_state['sl_w'], w_min, w_max)
+        st.session_state['sl_m'] = _clamp(st.session_state['sl_m'], m_min, m_max)
+        st.session_state['sl_m_pct'] = _clamp(st.session_state['sl_m_pct'], mp_min, mp_max)
+        st.session_state['sl_bf'] = _clamp(st.session_state['sl_bf'], bf_min, bf_max)
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
     
