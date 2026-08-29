@@ -181,6 +181,7 @@ DEFAULT_SETTINGS = {
     "muscle_mass_input_mode": "Percentage (%)",
     "enable_quotes": True,
     "enable_achievements": True,
+    "bodyweight_only_mode": False,
 }
 
 MUSCLE_INPUT_MODES = ["Percentage (%)", "Kilograms (kg)"]
@@ -224,7 +225,7 @@ st.markdown("""
     const urlParams = new URLSearchParams(window.location.search);
     let redirect = false;
     
-    const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset', 'calorie_custom', 'gym_start', 'mm_mode', 'enable_quotes', 'enable_achievements'];
+    const keys = ['user', 'goal', 'start', 'end', 'theme', 'activity', 'protein_custom', 'calorie_offset', 'calorie_custom', 'gym_start', 'mm_mode', 'enable_quotes', 'enable_achievements', 'bw_mode'];
     
     keys.forEach(k => {
         const sk = 'metrics_' + k;
@@ -382,6 +383,7 @@ def collect_app_settings():
         'muscle_mass_input_mode': st.session_state.get('muscle_mass_input_mode', DEFAULT_SETTINGS['muscle_mass_input_mode']),
         'enable_quotes': parse_bool_setting(st.session_state.get('enable_quotes'), True),
         'enable_achievements': parse_bool_setting(st.session_state.get('enable_achievements'), True),
+        'bodyweight_only_mode': parse_bool_setting(st.session_state.get('bodyweight_only_mode'), False),
     }
 
 def sync_query_params_from_settings():
@@ -399,6 +401,7 @@ def sync_query_params_from_settings():
         st.query_params["mm_mode"] = settings['muscle_mass_input_mode']
         st.query_params["enable_quotes"] = "1" if settings['enable_quotes'] else "0"
         st.query_params["enable_achievements"] = "1" if settings['enable_achievements'] else "0"
+        st.query_params["bw_mode"] = "1" if settings['bodyweight_only_mode'] else "0"
     except Exception:
         pass
 
@@ -437,6 +440,8 @@ def apply_loaded_settings(settings):
 
     assign('enable_quotes', parse_bool_setting(settings.get('enable_quotes'), st.session_state.get('enable_quotes', True)))
     assign('enable_achievements', parse_bool_setting(settings.get('enable_achievements'), st.session_state.get('enable_achievements', True)))
+    assign('bodyweight_only_mode', parse_bool_setting(settings.get('bodyweight_only_mode', settings.get('bw_mode')), st.session_state.get('bodyweight_only_mode', False)))
+    
     return changed
 
 # ══════════════════════════════════════════════════════════════
@@ -481,6 +486,7 @@ if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 if 'all_quotes' not in st.session_state: st.session_state['all_quotes'] = DEFAULT_QUOTES
 if 'enable_quotes' not in st.session_state: st.session_state['enable_quotes'] = parse_bool_setting(st.query_params.get("enable_quotes", DEFAULT_SETTINGS['enable_quotes']), DEFAULT_SETTINGS['enable_quotes'])
 if 'enable_achievements' not in st.session_state: st.session_state['enable_achievements'] = parse_bool_setting(st.query_params.get("enable_achievements", DEFAULT_SETTINGS['enable_achievements']), DEFAULT_SETTINGS['enable_achievements'])
+if 'bodyweight_only_mode' not in st.session_state: st.session_state['bodyweight_only_mode'] = parse_bool_setting(st.query_params.get("bw_mode", DEFAULT_SETTINGS['bodyweight_only_mode']), DEFAULT_SETTINGS['bodyweight_only_mode'])
 if 'goal_profiles' not in st.session_state: st.session_state['goal_profiles'] = DEFAULT_PROFILES
 
 if 'current_goal' not in st.session_state: st.session_state['current_goal'] = st.query_params.get("goal", DEFAULT_SETTINGS['goal'])
@@ -1037,18 +1043,6 @@ if app_view == "Entry":
     <div class="s-head" style="margin-bottom:0;">New Entry</div>
     """, unsafe_allow_html=True)
 
-    # -------------------------------------------------------------
-    # FIXED SLIDER LOGIC (crash-safe)
-    # The bounds are anchored to the absolute database values, and
-    # the current session_state value is ALWAYS clamped into those
-    # bounds before the widget is instantiated. This prevents the
-    # StreamlitAPIException ("the default value ... must be between
-    # min_value and max_value") that was crashing the Entry tab
-    # whenever a new logged value (or a deleted/edited row) shifted
-    # the DB-anchored bounds so the old slider position fell outside
-    # the new [min, max] range.
-    # -------------------------------------------------------------
-
     def _clamp(v, lo, hi):
         try:
             v = float(v)
@@ -1078,51 +1072,71 @@ if app_view == "Entry":
         st.session_state['sl_bf'] = _clamp(bf_val_db, bf_min, bf_max)
         st.session_state['reset_sliders'] = False
     else:
-        # Existing session state could be stale relative to freshly
-        # recomputed DB-anchored bounds (e.g. after a delete, an edit
-        # elsewhere, or a mode switch) — always re-clamp before the
-        # widgets below are created, or Streamlit will raise.
         st.session_state['sl_w'] = _clamp(st.session_state['sl_w'], w_min, w_max)
         st.session_state['sl_m'] = _clamp(st.session_state['sl_m'], m_min, m_max)
         st.session_state['sl_m_pct'] = _clamp(st.session_state['sl_m_pct'], mp_min, mp_max)
         st.session_state['sl_bf'] = _clamp(st.session_state['sl_bf'], bf_min, bf_max)
 
     st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Weight (kg)</div>", unsafe_allow_html=True)
-    
-    # 4. Render native sliders mapped safely to session_state
     w = st.slider("Weight", min_value=w_min, max_value=w_max, key="sl_w", step=0.1, label_visibility="collapsed")
     
-    mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
-    if mm_mode == "Kilograms (kg)":
-        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
-        m = st.slider("Muscle Mass", min_value=m_min, max_value=m_max, key="sl_m", step=0.1, label_visibility="collapsed")
+    bw_mode = st.session_state.get('bodyweight_only_mode', False)
+    
+    if bw_mode:
+        # Travel Mode Estimates
+        delta_w_est = w - w_val_db
+        # Assumes roughly 60% of weight changed is fat mass, 40% is lean tissue
+        old_fat_mass = w_val_db * (bf_val_db / 100.0)
+        new_fat_mass = max(0.0, old_fat_mass + (delta_w_est * 0.6))
+        
+        bf = (new_fat_mass / w) * 100.0 if w > 0 else bf_val_db
+        bf = _clamp(bf, bf_val_db - 15.0, bf_val_db + 15.0)
+        
+        m = m_val_db + (delta_w_est * 0.4)
+        m = _clamp(m, m_val_db - 15.0, m_val_db + 15.0)
+        
+        st.markdown(f"""
+        <div style='display:flex; justify-content:center; align-items:center; margin-top:1rem; margin-bottom: 2rem; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px;'>
+            <div style='text-align:center;'>
+                <div style='font-size:1.6rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{w:.1f}</div>
+                <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>Weight (kg)</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='alert-banner info'>✈️ Travel Mode: Auto-estimating Muscle at {m:.1f}kg and Body Fat at {bf:.1f}% based on weight change to keep the engine running smoothly.</div>", unsafe_allow_html=True)
+        
     else:
-        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
-        m_pct = st.slider("Muscle Mass", min_value=mp_min, max_value=mp_max, key="sl_m_pct", step=0.1, label_visibility="collapsed")
-        m = w * (m_pct / 100.0)
+        mm_mode = st.session_state.get('muscle_mass_input_mode', 'Percentage (%)')
+        if mm_mode == "Kilograms (kg)":
+            st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (kg)</div>", unsafe_allow_html=True)
+            m = st.slider("Muscle Mass", min_value=m_min, max_value=m_max, key="sl_m", step=0.1, label_visibility="collapsed")
+        else:
+            st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Muscle Mass (%)</div>", unsafe_allow_html=True)
+            m_pct = st.slider("Muscle Mass", min_value=mp_min, max_value=mp_max, key="sl_m_pct", step=0.1, label_visibility="collapsed")
+            m = w * (m_pct / 100.0)
 
-    st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
-    bf = st.slider("Body Fat", min_value=bf_min, max_value=bf_max, key="sl_bf", step=0.1, label_visibility="collapsed")
+        st.markdown("<div style='text-align:center; font-weight:800; font-size:0.75rem; color:var(--text-subtle); text-transform:uppercase; letter-spacing:1.5px; margin-top:1rem;'>Body Fat (%)</div>", unsafe_allow_html=True)
+        bf = st.slider("Body Fat", min_value=bf_min, max_value=bf_max, key="sl_bf", step=0.1, label_visibility="collapsed")
 
-    # Big display readout so it looks nice without hacking the slider!
-    st.markdown(f"""
-    <div style='display:flex; justify-content:space-around; align-items:center; margin-top:1rem; margin-bottom: 2rem; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px;'>
-        <div style='text-align:center;'>
-            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{w:.1f}</div>
-            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>W (kg)</div>
+        # Big display readout
+        st.markdown(f"""
+        <div style='display:flex; justify-content:space-around; align-items:center; margin-top:1rem; margin-bottom: 2rem; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px;'>
+            <div style='text-align:center;'>
+                <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{w:.1f}</div>
+                <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>W (kg)</div>
+            </div>
+            <div style='width:1px; height:30px; background:var(--border);'></div>
+            <div style='text-align:center;'>
+                <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{m:.1f}</div>
+                <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>M (kg)</div>
+            </div>
+            <div style='width:1px; height:30px; background:var(--border);'></div>
+            <div style='text-align:center;'>
+                <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{bf:.1f}</div>
+                <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>BF (%)</div>
+            </div>
         </div>
-        <div style='width:1px; height:30px; background:var(--border);'></div>
-        <div style='text-align:center;'>
-            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{m:.1f}</div>
-            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>M (kg)</div>
-        </div>
-        <div style='width:1px; height:30px; background:var(--border);'></div>
-        <div style='text-align:center;'>
-            <div style='font-size:1.4rem; font-weight:800; color:var(--text-main); font-family:\"DM Mono\", monospace;'>{bf:.1f}</div>
-            <div style='font-size:0.6rem; color:var(--text-subtle); font-weight:600; text-transform:uppercase;'>BF (%)</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     with st.form("log_form", border=False):
         if st.form_submit_button("Save Record", use_container_width=True):
@@ -1242,9 +1256,37 @@ elif app_view == "Trends":
         st.markdown(f"<div class='alert-banner warn'>⚠ Not enough data since custom start date — using last available logs</div>", unsafe_allow_html=True)
 
     font_cfg = dict(family='DM Mono, monospace', size=9, color='rgba(128,128,128,0.8)')
+    bw_mode = st.session_state.get('bodyweight_only_mode', False)
+
+    if bw_mode:
+        st.markdown('<div class="s-head" style="margin-top:0;">Weekly Averages (Travel Mode)</div>', unsafe_allow_html=True)
+        try:
+            df_weekly = df.set_index('Date').resample('W-MON').mean(numeric_only=True).reset_index().dropna(subset=['Weight (kg)'])
+            
+            fig_wa = go.Figure()
+            fig_wa.add_trace(go.Bar(
+                x=df_weekly['Date'], y=df_weekly['Weight (kg)'],
+                name='Weekly Avg', marker_color='#3B82F6', opacity=0.85,
+                text=df_weekly['Weight (kg)'].round(1),
+                textposition='inside', insidetextanchor='middle',
+                textfont=dict(family='DM Mono', size=11, color='white')
+            ))
+            fig_wa.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=20, b=30), height=300,
+                xaxis=dict(showgrid=False, tickformat='%b %d', tickfont=font_cfg),
+                yaxis=dict(showgrid=True, gridcolor='rgba(150,150,150,0.1)', range=[df['Weight (kg)'].min()-2, df['Weight (kg)'].max()+2], side='right', tickfont=font_cfg)
+            )
+            st.plotly_chart(fig_wa, use_container_width=True, config={'displayModeBar': False})
+        except Exception as e:
+            st.error("Not enough data to calculate weekly averages yet.")
+            
+        st.markdown('<div class="s-head">Daily Trajectories</div>', unsafe_allow_html=True)
 
     for metric in METRICS:
         if metric != 'Weight (kg)' and not has_enough_comp_data: continue
+        # Optional: Hide BF and MM charts entirely in BW mode
+        if bw_mode and metric != 'Weight (kg)': continue
 
         last_val = df.iloc[-1][metric]
         unit = METRIC_UNIT[metric]
@@ -1677,6 +1719,8 @@ elif app_view == "Settings":
     new_theme = st.selectbox("Theme", ["System", "Dark", "Light"], index=["System", "Dark", "Light"].index(st.session_state['theme_pref']))
 
     st.markdown('<div class="settings-lbl">Features</div>', unsafe_allow_html=True)
+    new_bw_only = st.toggle("Travel Mode (Bodyweight Only)", value=st.session_state.get('bodyweight_only_mode', False))
+    st.markdown("<div class='data-note'>Hides muscle/fat sliders during entry, estimates them for the engine automatically, and enables the 'Weekly Averages' graph in the Trends tab.</div>", unsafe_allow_html=True)
     new_enable_quotes = st.toggle("Motivational Quotes", value=st.session_state.get('enable_quotes', True))
     new_enable_achievements = st.toggle("Achievements System", value=st.session_state.get('enable_achievements', True))
 
@@ -1691,6 +1735,7 @@ elif app_view == "Settings":
         st.session_state['theme_pref'] = new_theme
         st.session_state['enable_quotes'] = new_enable_quotes
         st.session_state['enable_achievements'] = new_enable_achievements
+        st.session_state['bodyweight_only_mode'] = new_bw_only
         
         ok = persist_app_settings(st.session_state['sheet_url'])
         system_alert("Saved to Sheets" if ok else "Local Save Only", "ok" if ok else "err")
