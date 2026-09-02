@@ -1210,8 +1210,8 @@ elif app_view == "Nutrition":
     bf_lower = ideal_rates['Body Fat (%)'][1] if len(ideal_rates['Body Fat (%)']) > 1 else -99
     is_fat_loss_driven = (wt_trend < w_min) and has_enough_comp_data and (mmt >= -0.2) and (bft < bf_lower)
 
-    if days_elapsed_since_start < 21:
-        st.markdown(hud_card("c-neu", "⏳", "Phase Lock Active", f"Goal locked for the first 3-4 weeks to stabilize water noise. No calorie adjustments recommended yet. (Day {days_elapsed_since_start}/21)"), unsafe_allow_html=True)
+    if days_elapsed_since_start < 7:
+        st.markdown(hud_card("c-neu", "⏳", "Phase Lock Active", f"Goal locked for the first week to stabilize initial data. No calorie adjustments recommended yet. (Day {days_elapsed_since_start}/7)"), unsafe_allow_html=True)
     elif len(df_window_full) < 5:
         st.markdown(hud_card("c-neu", "⏳", "Calibrating", "Need more data points since the Start Date to provide adaptive calorie adjustments."), unsafe_allow_html=True)
     else:
@@ -1508,8 +1508,8 @@ elif app_view == "Analysis":
     bf_lower = ideal_weekly_rates['Body Fat (%)'][1] if len(ideal_weekly_rates['Body Fat (%)']) > 1 else -99
     is_fat_loss_driven = (wt < w_lower) and has_enough_comp_data and (mmt >= (-0.2 * 7 / 30)) and (bft < bf_lower)
 
-    if days_elapsed_since_start < 21:
-        diags.append(hud_card("c-neu", "⏳", "Phase Lock", f"Goal locked for first 3 weeks to stabilize water noise. No adjustments advised. (Day {days_elapsed_since_start}/21)"))
+    if days_elapsed_since_start < 7:
+        diags.append(hud_card("c-neu", "⏳", "Phase Lock", f"Goal locked for the first week to stabilize initial data. No adjustments advised. (Day {days_elapsed_since_start}/7)"))
     elif is_muscle_driven:
         diags.append(hud_card("c-ok", "🧬", "Hyper-Anabolic Response", f"Weight is increasing quickly (+{wt:.2f} kg/wk), but it is heavily driven by muscle gain (+{mmt:.2f} kg/wk). Do not cut calories yet."))
     elif is_fat_loss_driven:
